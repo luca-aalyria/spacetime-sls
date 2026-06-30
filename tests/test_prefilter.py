@@ -5,7 +5,7 @@ from ngso_sls.constellation.walker import walker_elements
 from ngso_sls.propagation.kepler_j2 import KeplerJ2Propagator
 from ngso_sls.geometry.frames import gmst_rad, eci_to_ecef, geodetic_to_ecef, enu_up
 from ngso_sls.geometry.access import elevation_deg
-from ngso_sls.grids.h3_grid import h3_cells_for_bbox
+from ngso_sls.grids.h3_grid import h3_cells_for_bbox, cell_circumradius_deg
 from ngso_sls.coverage.prefilter import (
     cap_half_angle_deg,
     ecef_to_subpoint_latlon,
@@ -47,7 +47,7 @@ def test_prefilter_is_conservative_superset_of_true_visibility():
 
     # pre-filter mask
     sub_lat, sub_lon = ecef_to_subpoint_latlon(r_ecef)
-    dil = conservative_dilation_deg(650.0, 25.0, cell_res=3, step_s=60.0)
+    dil = conservative_dilation_deg(650.0, 25.0, cell_circumradius_deg(3), step_s=60.0)
     mask = relevant_sat_mask(sub_lat, sub_lon, clat, clon, dil)
 
     # CONSERVATIVE: every truly-in-view sat is kept (no false negatives)

@@ -1,6 +1,5 @@
 import numpy as np
 from ..constants import MU_EARTH, RE_EQ
-from ..grids.h3_grid import cell_circumradius_deg
 
 # Geocentric-vs-geodetic latitude differs by up to ~0.19deg; absorb it (plus rounding) here.
 _SAFETY_DEG = 0.30
@@ -22,13 +21,13 @@ def ground_speed_kms(alt_km: float) -> float:
     return v * RE_EQ / a                 # projected onto the ground
 
 
-def conservative_dilation_deg(alt_km, min_elev_deg, cell_res, step_s) -> float:
+def conservative_dilation_deg(alt_km, min_elev_deg, cell_circumradius_deg, step_s) -> float:
     """Dilation radius (deg of arc) that makes the pre-filter a guaranteed superset of true
-    visibility: cap half-angle + cell circumradius + half-step motion halo + safety."""
+    visibility: cap half-angle + cell circumradius + half-step motion halo + safety.
+    `cell_circumradius_deg` is supplied by the caller (keeps this module numpy-only)."""
     lam = cap_half_angle_deg(alt_km, min_elev_deg)
-    r_cell = cell_circumradius_deg(cell_res)
     halo = (ground_speed_kms(alt_km) * step_s / 2.0) / 111.195
-    return lam + r_cell + halo + _SAFETY_DEG
+    return lam + cell_circumradius_deg + halo + _SAFETY_DEG
 
 
 def ecef_to_subpoint_latlon(r_ecef: np.ndarray):

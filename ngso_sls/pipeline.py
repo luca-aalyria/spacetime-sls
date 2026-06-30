@@ -5,7 +5,7 @@ from .propagation.kepler_j2 import KeplerJ2Propagator
 from .geometry.frames import gmst_rad, eci_to_ecef, geodetic_to_ecef, enu_up
 from .geometry.access import elevation_deg
 from .grids.aor import latlon_grid
-from .grids.h3_grid import h3_cells_for_bbox
+from .grids.h3_grid import h3_cells_for_bbox, cell_circumradius_deg
 from .grids.shards import assign_shards
 from .coverage.visibility import max_elev_and_count
 from .coverage.availability import availability
@@ -76,7 +76,9 @@ def run_coverage_h3(
         groups, _ = assign_shards(cells, shard_res)
         shards = {s: np.array(idx) for s, idx in groups.items()}
         sub_lat, sub_lon = ecef_to_subpoint_latlon(r_ecef)
-        dil = conservative_dilation_deg(max_alt, min_elev, cell_res, sim.time_grid.step_s)
+        dil = conservative_dilation_deg(
+            max_alt, min_elev, cell_circumradius_deg(cell_res), sim.time_grid.step_s
+        )
 
     chunk = chunk_steps or n_time
     bounds = [(i, min(i + chunk, n_time)) for i in range(0, n_time, chunk)]
