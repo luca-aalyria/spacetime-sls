@@ -84,7 +84,12 @@ Slice A **Milestone 1 (MVP) is complete and tested**. Primary deliverable:
 
 ## Notes / Risks
 
-- **Sandbox cannot run the numerical engine as-is** (no stack, Python 3.14, no pip). Engine
-  validation happens in Colab or a staged offline venv. Never report a numerical result as
-  locally verified unless it actually ran.
-- "No internet" is the operating assumption (owner-declared) despite a successful pypi probe.
+- **Engine runs locally** in `.venv` (pypi reachable; full stack installed) and in Colab. Report
+  faithfully whether a result was run locally vs Colab vs not yet.
+- **Customer/reference material + the original 3.3 MB spec live under `references/` (gitignored).**
+  In-repo authoritative docs are `docs/design-docs/`.
+- **Git history was reset to a single clean commit (2026-06-30)** to remove customer-confidential
+  files (Telesat CCMS/Lightspeed, Rivada) that the initial `git add -A` had committed. The tracked
+  tree + history are now clean → **safe to push to a remote** (set the notebook's `REPO_URL` to it).
+- **Disk caveat:** `/dev/sda1` (shared with the large monorepos) runs ~100% full; a low-space write
+  truncated `README.md` once (rebuilt). If writes fail with ENOSPC, free space before retrying.
