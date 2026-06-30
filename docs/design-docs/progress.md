@@ -56,8 +56,15 @@ Implementation — **Milestone 1 (MVP) COMPLETE** (2026-06-30, 20/20 tests passi
   66.8°, availability=1.000 @ k=1 (correct: full constellation continuously covers India). ~10 s / 272
   cells (2° grid, 1 h @ 60 s). MVP is unchunked (memory ∝ cells×sats×times) → chunking is M3.
 
-M1 deferred to later milestones (per plan roadmap): H3+sharding+prefilter (M3), elevation sweep (M4),
-terminals/UT (M5), in-view intervals (M6), population+min-N sweep (M7), cell_layout metadata+guard (M8).
+M1 deferred to later milestones (per plan roadmap): H3+sharding+prefilter (M3 ✓ done), elevation
+sweep (M4), terminals/UT (M5), in-view intervals (M6), population+min-N sweep (M7), cell_layout (M8).
+
+**Milestone 3 (sharding) COMPLETE** (2026-06-30, 29/29 tests):
+- [x] `grids/h3_grid.py` (H3 AOR cells + circumradius) · `grids/shards.py` (single-owner `cellToParent`)
+- [x] `coverage/prefilter.py` (cap λ geometry, ECEF→subpoint, conservative `relevant_sat_mask`;
+      conservativeness proven as superset of brute-force in-view; ~18× sat-axis pruning, 1600→~90/shard)
+- [x] `pipeline.run_coverage_h3` (sharded + time-chunked) · **`sharded == monolithic` bit-identical CI test**
+- Chunking+pre-filter lift the MVP memory ceiling; shards are embarrassingly parallel (multi-worker = future).
 
 ### Slices B–E — queued (designs not yet written)
 - [ ] Slice B — capacity, link budget, demand, beam-hopping scheduler
@@ -69,16 +76,16 @@ terminals/UT (M5), in-view intervals (M6), population+min-N sweep (M7), cell_lay
 
 ## Current Focus
 
-Slice A **Milestone 1 (MVP) is complete and tested**. Primary deliverable:
-`notebooks/01_slice_a_mvp.ipynb` (set `REPO_URL` to a git remote for Colab).
+Slice A **Milestones 1 (MVP) + 3 (sharding) complete and tested** (29/29). Engine now scales via
+single-owner H3 shards + conservative pre-filter + time-chunking.
 
 ## Next Steps
 
 1. (Owner) Push repo to a git remote so the notebook's `!git clone` works in Colab.
-2. M2 — oracle hardening (Skyfield/SGP4 ECI cross-check + error budget).
-3. M3 — H3 grid + single-owner shards + conservative cap pre-filter + `sharded==monolithic` CI test
-   (also lifts the MVP memory ceiling → enables fine grids / 24 h runs).
-4. M4–M8 per the implementation-plan roadmap.
+2. **M7 — min-N sweep** (the headline Jio answer: reduce N / raise k until coverage drops; now
+   feasible at fine H3 grids thanks to M3) — or **M4** (elevation sweep) / **M5** (terminals/UT).
+3. M2 oracle hardening (Skyfield ECI cross-check) can slot in anytime.
+4. Wire multi-worker execution over shards (N7) when scale demands it.
 
 ---
 

@@ -10,6 +10,11 @@ Slice: A–E (see `design.md`).
 N4 (availability CSV — one output), N6 (oracle: two-body + SSO regression), SA1 (`max_elev`/`n_in_view`),
 SA2 (coverage-availability output #3), SA5 (lat/lon grid). Remaining sub-items land in M2–M8.
 
+**Slice A Milestone 3 (sharding) implemented (2026-06-30):** SA5 (H3 grid added → both grids done),
+S4 (single-owner `cellToParent` shards + conservative cap pre-filter, ~18× sat-axis pruning),
+S6 (`sharded == monolithic` bit-identical CI test), N3/N7 (chunked+sharded engine lifts the memory
+ceiling; shards embarrassingly parallel — multi-worker still to be wired). 29 tests passing.
+
 ## Anchors
 | ID | Requirement | Slice | Status |
 |----|-------------|-------|--------|

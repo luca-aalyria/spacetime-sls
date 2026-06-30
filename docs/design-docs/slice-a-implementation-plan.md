@@ -808,7 +808,7 @@ git add -A && git commit -q -m "feat: viz + Colab MVP notebook + docs sync (Slic
 Each milestone is additive, keeps all M1 tests green, and follows the same TDD cadence. Detailed step-by-step plans are written at the start of each (per the design doc).
 
 - **M2 — Oracle hardening & accuracy.** Independent ECI cross-check vs Skyfield/SGP4 for a synthesized circular orbit; document along/cross/radial error vs propagation time; lock `step_s` accuracy guidance (boolean-agreement metric). (Design §6.)
-- **M3 — H3 grid + single-owner `cellToParent` shards + conservative cap pre-filter (λ=9.674°).** Add `grids/shards.py`, `coverage/prefilter.py`; **CI invariant `sharded == monolithic`** (bit-identical). Sharding stays default-off. (Design §3.)
+- **M3 — H3 grid + single-owner `cellToParent` shards + conservative cap pre-filter (λ=9.674°). ✓ DONE (2026-06-30).** `grids/h3_grid.py`, `grids/shards.py`, `coverage/prefilter.py`, `pipeline.run_coverage_h3`; **CI invariant `sharded == monolithic`** holds bit-identical; ~18× sat-axis pruning. Sharding default-off. (Design §3.)
 - **M4 — Elevation-threshold sweep + serving-elevation CDF.** `availability_by_elevation(cell,θ)` via broadcast on `max_elev`; monotonicity assert. (Design §4.)
 - **M5 — `terminals/` (UT distributions).** `TerminalSet` + seeded generators (uniform/population/hotspot/polygon/CSV); user-weighted availability + %-users-covered. (Design §4, SA4.)
 - **M6 — In-view interval family.** Per-(sat,cell/UT) intervals + distributions + count/frequency + in-view fraction; censoring flags; in-view-fraction == availability cross-check. (Design §4, SA7.)
