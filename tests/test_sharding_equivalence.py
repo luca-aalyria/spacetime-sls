@@ -19,6 +19,8 @@ def test_sharded_equals_monolithic_bit_identical():
     assert glob["cells"] == shard["cells"]
     # the invariant: bit-identical availability regardless of sharding/chunking
     np.testing.assert_array_equal(glob["availability"], shard["availability"])
+    # and the same for mean sats-in-view (also an integer-count reduction)
+    np.testing.assert_array_equal(glob["sats_in_view_mean"], shard["sats_in_view_mean"])
 
 
 def test_chunking_alone_is_identical():

@@ -3,7 +3,7 @@ name = "ngso_sls"
 version = "0.0.1"
 description = "NGSO constellation coverage/availability simulator (Slice A)"
 requires-python = ">=3.12"
-dependencies = ["numpy", "astropy", "pandas", "matplotlib", "h3"]
+dependencies = ["numpy", "astropy", "pandas", "matplotlib", "h3", "plotly", "ipywidgets"]
 
 [project.optional-dependencies]
 oracle = ["skyfield", "sgp4"]
