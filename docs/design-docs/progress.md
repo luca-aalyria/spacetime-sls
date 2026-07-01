@@ -76,8 +76,11 @@ sweep (M4), terminals/UT (M5), in-view intervals (M6), population+min-N sweep (M
 
 ## Current Focus
 
-Slice A **Milestones 1 (MVP) + 3 (sharding) complete and tested** (29/29). Engine now scales via
-single-owner H3 shards + conservative pre-filter + time-chunking.
+Slice A **Milestones 1 (MVP) + 3 (sharding) complete and tested** (30/30). Engine now scales via
+single-owner H3 shards + conservative pre-filter + time-chunking. Colab-verified: notebook loads
+from remote **`github.com/luca-aalyria/spacetime-sls`** (aalyria org blocks the Colab OAuth app;
+use a personal repo + `GITHUB_TOKEN` secret for private). Notebook uses **non-editable** install
+(pip `-e` doesn't import in a running Colab kernel).
 
 ## Next Steps
 
