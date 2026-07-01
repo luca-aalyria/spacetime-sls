@@ -1,6 +1,44 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.collections import PolyCollection
+import h3
 import plotly.graph_objects as go
+
+
+def _hexmap(res, values, label, title, cmap, vmin=None, vmax=None):
+    """2D geographic map (matplotlib): H3 cells as hexagons colored by `values`.
+    Renders reliably in Colab/Jupyter (plain matplotlib, no JS)."""
+    polys = []
+    for c in res["cells"]:
+        # h3 boundary is [(lat, lng), ...]; matplotlib wants (x=lon, y=lat)
+        polys.append([(lng, lat) for (lat, lng) in h3.cell_to_boundary(c)])
+    pc = PolyCollection(
+        polys, array=np.asarray(values, dtype=float), cmap=cmap, edgecolors="face", linewidths=0.2
+    )
+    pc.set_clim(vmin if vmin is not None else float(np.min(values)),
+                vmax if vmax is not None else float(np.max(values)))
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.add_collection(pc)
+    ax.autoscale_view()
+    lat_mid = float(np.mean(res["lat"]))
+    ax.set_aspect(1.0 / max(np.cos(np.radians(lat_mid)), 0.1))  # rough lon/lat distortion fix
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    ax.set_title(f"{title} (min elev {res['min_elev_deg']}°)")
+    fig.colorbar(pc, ax=ax, label=label)
+    return fig
+
+
+def plot_coverage_hexmap(res: dict, title: str = "Coverage availability"):
+    """Geographic map of per-cell coverage availability (fraction of time, 0-1)."""
+    return _hexmap(res, res["availability"], "availability (fraction of time)", title,
+                   cmap="RdYlGn", vmin=0.0, vmax=1.0)
+
+
+def plot_sats_in_view_hexmap(res: dict, title: str = "Mean satellites in view"):
+    """Geographic map of mean number of satellites in view (>= min elev) per cell."""
+    return _hexmap(res, res["sats_in_view_mean"], "mean satellites in view", title,
+                   cmap="viridis", vmin=0.0, vmax=None)
 
 
 def plot_availability(res: dict):
