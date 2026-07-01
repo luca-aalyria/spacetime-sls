@@ -82,6 +82,13 @@ from remote **`github.com/luca-aalyria/spacetime-sls`** (aalyria org blocks the 
 use a personal repo + `GITHUB_TOKEN` secret for private). Notebook uses **non-editable** install
 (pip `-e` doesn't import in a running Colab kernel).
 
+**Notebook UX** (2026-07-01): rebuilt `01_slice_a_mvp.ipynb` as an interactive **Coverage Explorer** —
+ipywidgets control panel (constellation/AOR/altitude/incl/min-elev/H3-res/duration/step/k/sharding +
+Run button, auto-runs defaults), **Plotly** interactive geographic coverage map, sats-in-view-vs-latitude,
+availability histogram. Engine returns `sats_in_view_mean`; AOR presets India/CONUS/Europe/Global; deps
+`plotly`+`ipywidgets` added. Colab loading solved (non-editable install from abspath; personal repo +
+`GITHUB_TOKEN` since aalyria org blocks the Colab OAuth app). 31 tests.
+
 ## Next Steps
 
 1. (Owner) Push repo to a git remote so the notebook's `!git clone` works in Colab.
