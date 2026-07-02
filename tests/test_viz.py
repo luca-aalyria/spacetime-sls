@@ -59,3 +59,28 @@ def test_hexmap_returns_figure_with_polygons():
     # configurable opacity is applied to the hex PolyCollection
     fig = plot_coverage_hexmap(res, alpha=0.3)
     assert any(abs((c.get_alpha() or 1.0) - 0.3) < 1e-9 for c in fig.axes[0].collections)
+
+
+def test_mbb_hexmap_and_sweep_overlay():
+    import h3
+    from ngso_sls.viz.plots import plot_mbb_feasible_hexmap, plot_min_sat_sweep
+    cells = [h3.latlng_to_cell(lat, 80.0, 3) for lat in (10.0, 20.0, 30.0)]
+    res = {
+        "cells": cells, "lat": np.array([10.0, 20.0, 30.0]), "lon": np.array([80.0, 80.0, 80.0]),
+        "min_elev_deg": 25.0, "continuity_overlap_s": 30.0,
+        "mbb_feasible": np.array([False, True, True]),
+    }
+    assert len(plot_mbb_feasible_hexmap(res).axes[0].collections) >= 1
+    # sweep plot with the MBB gate overlay (fail flag + min-N marker)
+    sweep = {
+        "sweep": [
+            {"N": 240, "planes": 6, "sats_per_plane": 40, "mean_sats_in_view": 3.0,
+             "pct_by_k": {1: 0.8}, "mean_avail_by_k": {1: 0.9}, "pct_mbb": 0.5, "mbb_pass": False},
+            {"N": 480, "planes": 6, "sats_per_plane": 80, "mean_sats_in_view": 6.0,
+             "pct_by_k": {1: 1.0}, "mean_avail_by_k": {1: 1.0}, "pct_mbb": 0.97, "mbb_pass": True},
+        ],
+        "min_N_by_k": {1: 240}, "min_N_mbb": 480, "continuity_overlap_s": 30.0, "k_values": [1],
+        "target_availability": 0.95, "area_grade": 0.95,
+        "planes": 6, "altitude_km": 650.0, "inclination_deg": 53.0,
+    }
+    assert len(plot_min_sat_sweep(sweep).axes) >= 1

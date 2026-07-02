@@ -57,6 +57,18 @@ def plot_sats_in_view_hexmap(res: dict, title: str = "Mean satellites in view (t
                    cmap="viridis", vmin=0.0, vmax=None, alpha=alpha)
 
 
+def plot_mbb_feasible_hexmap(res: dict, title: str = "Make-before-break feasible (k=1)",
+                             alpha: float = _HEX_ALPHA):
+    """Geographic map of per-cell make-before-break continuity: green = a satellite is always
+    in view with a valid 2-sat handover overlap at every transition; red = fails (uncovered
+    gap or too-short overlap). Requires a run with `continuity_overlap_s` set."""
+    ov = res.get("continuity_overlap_s")
+    suffix = f" (≥{ov:g}s overlap)" if ov is not None else ""
+    return _hexmap(res, res["mbb_feasible"].astype(float),
+                   "MBB feasible (1 = continuous k=1 + overlap)", title + suffix,
+                   cmap="RdYlGn", vmin=0.0, vmax=1.0, alpha=alpha)
+
+
 def plot_availability(res: dict):
     """Simple matplotlib scatter of per-cell coverage availability over the AOR."""
     fig, ax = plt.subplots(figsize=(7, 6))
@@ -144,6 +156,21 @@ def plot_min_sat_sweep(sweep: dict):
         if mn is not None:
             ax.axvline(mn, ls=":", lw=1.6, color=c)
             ax.annotate(f"min N(k={k})={mn}", xy=(mn, 5), color=c, fontsize=8,
+                        rotation=90, va="bottom", ha="right")
+    if sweep.get("continuity_overlap_s") is not None:      # k=1 make-before-break gate overlay
+        ov = sweep["continuity_overlap_s"]
+        pct = [100.0 * r.get("pct_mbb", 0.0) for r in s]
+        ax.plot(N, pct, "-s", ms=5, color="black",
+                label=f"k=1 make-before-break (≥{ov:g}s overlap)")
+        failN = [r["N"] for r in s if not r.get("mbb_pass", False)]
+        failP = [100.0 * r["pct_mbb"] for r in s if not r.get("mbb_pass", False)]
+        if failN:
+            ax.scatter(failN, failP, marker="x", s=90, color="red", zorder=6,
+                       label="fails handover gate")
+        mn = sweep.get("min_N_mbb")
+        if mn is not None:
+            ax.axvline(mn, ls="-.", lw=1.6, color="black")
+            ax.annotate(f"min N(MBB)={mn}", xy=(mn, 5), color="black", fontsize=8,
                         rotation=90, va="bottom", ha="right")
     ax.axhline(100.0 * sweep["area_grade"], ls="--", color="0.4", lw=1,
                label=f"area grade {sweep['area_grade']:.0%}")

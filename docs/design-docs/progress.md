@@ -103,6 +103,14 @@ availability histogram. Engine returns `sats_in_view_mean`; AOR presets India/CO
     (red-flagged failures). Design being adversarially verified (workflow `wc6hit6je`). **Then**
     (SA15, deferred/lower-priority) patent-shape screening post-check — stub written
     (`slice-a-patent-screening.md`); consumes the SA12 model; engineering flag, not legal FTO.
+    **Shipped incrementally ahead of the full design (2026-07-02, 66 tests):** k=1 make-before-break
+    overlap (SA13) on the existing engine — `coverage/continuity.py` (interval extraction +
+    bottleneck serving-path test), `run_coverage_h3(continuity_overlap_s=…)` returning per-cell
+    `mbb_feasible`/`worst_overlap_s`/`n_handovers` (grid-quantized ±step_s; sharded==monolithic
+    preserved), sweep k=1 handover gate (`min_N_mbb`, red-flagged failures), MBB hexmap, and
+    Explorer/Sweep controls. Plus two UX changes: **all input params saved into the output CSV
+    manifest + echoed**, and **run history kept** (each run appends a new tab/panel, previous runs
+    retained). Deferred to the full design: sub-step bisection refinement + different-plane rule.
 
 0. **Slice E — Spacetime NBI integration: DESIGN DONE, adversarially verified (2026-07-02).**
    Design doc: `slice-e-nbi-integration.md`. 7-agent workflow `wi2lk7ugy` mapped the pull

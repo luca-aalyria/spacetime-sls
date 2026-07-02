@@ -34,6 +34,22 @@ def test_min_sat_sweep_k1_vs_k2():
         assert m2 >= m1
 
 
+def test_min_sat_sweep_mbb_gate():
+    res = min_sat_sweep(AORS["India"], planes=6, altitude_km=650.0, inclination_deg=53.0,
+                        sats_per_plane_values=[4, 8], k_values=(1,),
+                        target_availability=0.95, area_grade=0.90, min_elev_deg=25.0,
+                        cell_res=2, duration_s=1800.0, step_s=60.0,
+                        continuity_overlap_s=30.0)
+    assert "min_N_mbb" in res and res["continuity_overlap_s"] == 30.0
+    for r in res["sweep"]:
+        assert 0.0 <= r["pct_mbb"] <= 1.0
+        assert r["mbb_pass"] == (r["pct_mbb"] >= res["area_grade"])
+        # MBB feasibility (full continuity) is at least as strict as the k=1 availability grade
+        assert r["pct_mbb"] <= r["pct_by_k"][1] + 1e-9
+    if res["min_N_mbb"] is not None:                    # gated min-N >= plain k=1 min-N
+        assert res["min_N_by_k"][1] is None or res["min_N_mbb"] >= res["min_N_by_k"][1]
+
+
 def test_min_sat_sweep_plot():
     from ngso_sls.viz.plots import plot_min_sat_sweep
     sweep = {

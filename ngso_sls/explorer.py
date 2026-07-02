@@ -27,6 +27,7 @@ from .grids.aor import AORS
 from .viz.plots import (
     plot_coverage_hexmap,
     plot_sats_in_view_hexmap,
+    plot_mbb_feasible_hexmap,
     plot_sats_in_view_vs_latitude,
     plot_availability_hist,
 )
@@ -85,21 +86,21 @@ class CoverageExplorer:
                                          style=s, layout=L)
         self.hex_alpha = w.FloatSlider(value=0.80, min=0.1, max=1.0, step=0.05,
                                        description="Cell opacity", style=s, layout=L)
+        self.handover_gate = w.Checkbox(value=False,
+                                        description="k=1 make-before-break gate (min 2-sat overlap)")
+        self.overlap_s = w.FloatSlider(value=20, min=0, max=180, step=5,
+                                       description="Min 2-sat overlap s", style=s, layout=L)
         self.run_btn = w.Button(description="Run simulation", button_style="primary", icon="play")
         self.progress = w.IntProgress(value=0, min=0, max=1, bar_style="info",
                                       layout=w.Layout(width="260px"))
         self.status = w.HTML("<i>idle</i>")
 
     def _build_layout(self):
-        box = w.Layout(border="1px solid #ccc", padding="6px", margin="2px", min_height="60px")
         self.out_log = w.Output(layout=w.Layout(min_height="40px"))
-        self.out_avail = w.Output(layout=box)
-        self.out_siv = w.Output(layout=box)
-        self.out_lat = w.Output(layout=box)
-        self.out_hist = w.Output(layout=box)
-        self.tabs = w.Tab(children=[self.out_avail, self.out_siv, self.out_lat, self.out_hist])
-        for i, t in enumerate(["Availability map", "Sats-in-view map", "Sats vs latitude", "Histogram"]):
-            self.tabs.set_title(i, t)
+        self.runs_tab = w.Tab(children=[])          # one child tab per run (history kept)
+        self._run_count = 0
+        self.tab_titles = ["Availability map", "Sats-in-view map", "MBB feasibility",
+                           "Sats vs latitude", "Histogram"]
         self.controls = w.VBox([
             _lbl("Scenario & service area"),
             w.HBox([self.scenario, self.aor]),
@@ -113,12 +114,16 @@ class CoverageExplorer:
             w.HBox([self.min_elev, self.cell_res]),
             w.HBox([self.duration_min, self.step_s]),
             w.HBox([self.k_cov, self.use_shard]),
+            _lbl("Handover continuity (k=1 make-before-break: continuous single coverage "
+                 "+ a ≥ overlap 2-sat window at every handover)"),
+            w.HBox([self.handover_gate, self.overlap_s]),
             w.HBox([self.hex_alpha, self.terrain_on]),
             w.HBox([self.terrain_source]),
             self.run_btn,
             w.HBox([self.progress, self.status]),
         ])
-        self.results = w.VBox([_lbl("Run log"), self.out_log, self.tabs])
+        self.results = w.VBox([_lbl("Runs (each run appends a new tab — previous runs are kept)"),
+                               self.out_log, self.runs_tab])
 
     # -- model ----------------------------------------------------------------
     def build_constellation(self) -> Constellation:
@@ -155,15 +160,38 @@ class CoverageExplorer:
                     *d, clat, clon, n_bins=36, radius_km=400)
             else:
                 terrain = lambda clat, clon: cell_horizon_masks(clat, clon, bbox)  # noqa: E731
+        overlap = self.overlap_s.value if self.handover_gate.value else None
         res = run_coverage_h3(sim, AORS[self.aor.value], cell_res=self.cell_res.value,
                               shard_res=(1 if self.use_shard.value else None), chunk_steps=10,
-                              progress=progress, terrain=terrain)
+                              progress=progress, terrain=terrain, continuity_overlap_s=overlap)
         res["_sim"] = sim
         res["_total_sats"] = sum(s.walker_T for s in cons.shells)
         res["_shape"] = "; ".join(
             f"{s.walker_T}/{s.walker_P}/{s.walker_F} @{s.inclination_deg:g}°/{s.altitude_km:g}km"
             for s in cons.shells)
+        res["_params"] = self._params()
         return res
+
+    def _params(self) -> dict:
+        """The full input parameter set for this run (saved into the output CSV + shown in the
+        run panel), so every result is self-describing and reproducible."""
+        p = {
+            "scenario": self.scenario.value, "service_area": self.aor.value,
+            "min_elev_deg": self.min_elev.value, "h3_res": self.cell_res.value,
+            "duration_min": self.duration_min.value, "step_s": self.step_s.value,
+            "k_coverage": self.k_cov.value, "sharding": self.use_shard.value,
+            "handover_gate": self.handover_gate.value,
+            "min_overlap_s": (self.overlap_s.value if self.handover_gate.value else None),
+            "terrain": (self.terrain_source.value if self.terrain_on.value else "off"),
+            "epoch_utc": _EPOCH.isoformat(), "propagator": "KeplerJ2", "seed": 0,
+        }
+        if self.scenario.value == "Custom (Walker)":
+            p["shell1"] = (f"{self.planes1.value}p×{self.spp1.value}s/p F{self.phase1.value} "
+                           f"@{self.inc1.value:g}°/{self.alt1.value:g}km")
+            if self.shell2_on.value:
+                p["shell2"] = (f"{self.planes2.value}p×{self.spp2.value}s/p F{self.phase2.value} "
+                               f"@{self.inc2.value:g}°/{self.alt2.value:g}km")
+        return p
 
     # -- rendering ------------------------------------------------------------
     @staticmethod
@@ -171,8 +199,10 @@ class CoverageExplorer:
         with box:
             clear_output(wait=True)
             try:
-                make_fig()
+                fig = make_fig()
                 plt.show()
+                if fig is not None:
+                    plt.close(fig)          # keep the rendered image; free the figure handle
             except Exception:
                 traceback.print_exc()
 
@@ -194,27 +224,23 @@ class CoverageExplorer:
                 res = self.compute(progress=_progress)
                 self.last_result = res
                 a = res["availability"]
+                params = res["_params"]
                 print(f"Constellation: {self.scenario.value}  |  {res['_total_sats']} sats  |  {res['_shape']}")
-                print(f"Over {self.aor.value} (H3 res {self.cell_res.value}, {self.duration_min.value:.0f} min "
-                      f"@ {self.step_s.value:.0f}s, k={self.k_cov.value}):")
+                print("Parameters: " + ", ".join(f"{k}={v}" for k, v in params.items()))
                 print(f"  cells={len(res['cells'])}  availability mean={a.mean():.3f} min={a.min():.3f} "
                       f"max={a.max():.3f}  mean sats-in-view(time-avg)={res['sats_in_view_mean'].mean():.1f} "
                       f"(max {res['sats_in_view_mean'].max():.0f})")
-                write_availability_csv(
-                    res, self.csv_path,
-                    {"scenario": self.scenario.value, "aor": self.aor.value, "total_sats": res["_total_sats"],
-                     "k_coverage": self.k_cov.value, "seed": res["_sim"].seed,
-                     "step_s": res["_sim"].time_grid.step_s, "propagator": "KeplerJ2"})
+                if "mbb_feasible" in res:
+                    print(f"  make-before-break (≥{res['continuity_overlap_s']:g}s overlap): "
+                          f"{res['mbb_feasible'].mean():.1%} of cells feasible (k=1)")
+                write_availability_csv(res, self.csv_path,
+                                       {**params, "total_sats": res["_total_sats"], "shape": res["_shape"]})
                 print(f"  wrote {self.csv_path}")
             self.status.value = "🖼️ rendering plots…"
-            ak = self.k_cov.value
-            alpha = self.hex_alpha.value
-            self._draw(self.out_avail, lambda: plot_coverage_hexmap(res, title=f"Coverage availability (k={ak}) - {self.aor.value}", alpha=alpha))
-            self._draw(self.out_siv, lambda: plot_sats_in_view_hexmap(res, title=f"Mean satellites in view (time-avg) - {self.aor.value}", alpha=alpha))
-            self._draw(self.out_lat, lambda: plot_sats_in_view_vs_latitude(res))
-            self._draw(self.out_hist, lambda: plot_availability_hist(res))
-            self.status.value = (f"✅ done — {len(res['cells'])} cells, availability mean "
-                                 f"{a.mean():.3f}, mean sats-in-view {res['sats_in_view_mean'].mean():.1f}")
+            self._append_run_panel(res)
+            self.status.value = (f"✅ done — run {self._run_count}: {len(res['cells'])} cells, "
+                                 f"availability mean {a.mean():.3f}, mean sats-in-view "
+                                 f"{res['sats_in_view_mean'].mean():.1f}")
             self.progress.bar_style = "success"
         except Exception:
             with self.out_log:
@@ -224,6 +250,40 @@ class CoverageExplorer:
         finally:
             self.run_btn.disabled = False
             self.run_btn.description = "Run simulation"
+
+    def _append_run_panel(self, res):
+        """Render this run's plots into a fresh tab appended to the runs history (previous runs
+        stay visible), with a header echoing the input parameters."""
+        self._run_count += 1
+        n = self._run_count
+        alpha, ak, aor = self.hex_alpha.value, self.k_cov.value, self.aor.value
+        box = w.Layout(border="1px solid #ccc", padding="6px", margin="2px", min_height="60px")
+        o_av, o_siv, o_mbb, o_lat, o_hist = (w.Output(layout=box) for _ in range(5))
+        inner = w.Tab(children=[o_av, o_siv, o_mbb, o_lat, o_hist])
+        for i, t in enumerate(self.tab_titles):
+            inner.set_title(i, t)
+        self._draw(o_av, lambda: plot_coverage_hexmap(
+            res, title=f"Coverage availability (k={ak}) - {aor}", alpha=alpha))
+        self._draw(o_siv, lambda: plot_sats_in_view_hexmap(
+            res, title=f"Mean satellites in view (time-avg) - {aor}", alpha=alpha))
+        if "mbb_feasible" in res:
+            self._draw(o_mbb, lambda: plot_mbb_feasible_hexmap(
+                res, title=f"Make-before-break feasible - {aor}", alpha=alpha))
+        else:
+            with o_mbb:
+                clear_output(wait=True)
+                print("Enable the 'k=1 make-before-break gate' control to compute handover feasibility.")
+        self._draw(o_lat, lambda: plot_sats_in_view_vs_latitude(res))
+        self._draw(o_hist, lambda: plot_availability_hist(res))
+        params = res["_params"]
+        hdr = w.HTML(f"<b>Run {n}</b> — {res['_total_sats']} sats · {res['_shape']}<br>"
+                     f"<span style='font-size:90%;color:#555'>"
+                     + " · ".join(f"{k}={v}" for k, v in params.items()) + "</span>")
+        panel = w.VBox([hdr, inner])
+        self.runs_tab.children = self.runs_tab.children + (panel,)
+        idx = len(self.runs_tab.children) - 1
+        self.runs_tab.set_title(idx, f"Run {n}: k{ak}{' MBB' if 'mbb_feasible' in res else ''}")
+        self.runs_tab.selected_index = idx
 
     def display(self):
         """Show controls + results together and run once (single-cell convenience)."""
@@ -259,12 +319,15 @@ class MinSatSweep:
         self.duration_min = w.FloatSlider(value=30, min=10, max=240, step=10, description="Duration min", style=s, layout=L)
         self.step_s = w.FloatSlider(value=60, min=10, max=120, step=10, description="Time step s", style=s, layout=L)
         self.use_shard = w.Checkbox(value=True, description="Use sharding")
+        self.handover_gate = w.Checkbox(value=False, description="k=1 make-before-break gate")
+        self.overlap_s = w.FloatSlider(value=20, min=0, max=180, step=5,
+                                       description="Min 2-sat overlap s", style=s, layout=L)
         self.run_btn = w.Button(description="Run sweep", button_style="primary", icon="play")
         self.progress = w.IntProgress(value=0, min=0, max=1, bar_style="info", layout=w.Layout(width="260px"))
         self.status = w.HTML("<i>idle</i>")
-        box = w.Layout(border="1px solid #ccc", padding="6px", margin="2px", min_height="60px")
-        self.out_plot = w.Output(layout=box)
         self.out_log = w.Output(layout=w.Layout(min_height="40px"))
+        self.runs_box = w.VBox([])          # history of sweep run panels (kept across runs)
+        self._run_count = 0
         self.run_btn.on_click(self.run)
         self.controls = w.VBox([
             _lbl("Minimum-satellite sweep — base shell (single Walker shell, thinned by sats/plane)"),
@@ -280,12 +343,14 @@ class MinSatSweep:
             w.HBox([self.target_avail, self.area_grade]),
             w.HBox([self.min_elev, self.cell_res]),
             w.HBox([self.duration_min, self.step_s]),
+            _lbl("Handover continuity (k=1 make-before-break gate; failing sizes flagged red)"),
+            w.HBox([self.handover_gate, self.overlap_s]),
             self.use_shard,
             self.run_btn,
             w.HBox([self.progress, self.status]),
         ])
-        self.results = w.VBox([_lbl("Sweep log"), self.out_log,
-                               _titled("Coverage vs constellation size", self.out_plot)])
+        self.results = w.VBox([_lbl("Sweep runs (each run appends a panel below — previous kept)"),
+                               self.out_log, self.runs_box])
 
     def compute(self, progress=None):
         """Returns (mode, result, inclinations). mode is 'coverage_vs_N' for a single inclination,
@@ -294,11 +359,13 @@ class MinSatSweep:
         spp = list(range(self.spp_min.value, self.spp_max.value + 1, self.spp_step.value))
         ks = tuple(self.k_values.value) or (2,)
         incs = incl_values(self.incl_min.value, self.incl_max.value, self.incl_step.value)
+        overlap = self.overlap_s.value if self.handover_gate.value else None
         common = dict(min_elev_deg=self.min_elev.value, k_values=ks,
                       target_availability=self.target_avail.value, area_grade=self.area_grade.value,
                       cell_res=self.cell_res.value, duration_s=self.duration_min.value * 60.0,
                       step_s=self.step_s.value, phasing=self.phasing.value,
-                      use_sharding=self.use_shard.value, progress=progress)
+                      use_sharding=self.use_shard.value, progress=progress,
+                      continuity_overlap_s=overlap)
         if len(incs) <= 1:
             res = min_sat_sweep(AORS[self.aor.value], self.planes.value, self.altitude.value,
                                 incs[0], spp, **common)
@@ -327,6 +394,7 @@ class MinSatSweep:
                 n_spp = len(range(self.spp_min.value, self.spp_max.value + 1, self.spp_step.value))
                 print(f"Sweeping {len(incs)} inclination(s) x {n_spp} sizes over {self.aor.value} "
                       f"({self.planes.value} planes @ {self.altitude.value:g}km, k={list(ks)})…")
+                print("Parameters: " + ", ".join(f"{k}={v}" for k, v in self._params().items()))
                 mode, res, incs = self.compute(progress=_progress)
                 self.last_result, self.last_mode = res, mode
                 if mode == "coverage_vs_N":
@@ -340,6 +408,10 @@ class MinSatSweep:
                         mn = res["min_N_by_k"][k]
                         tag = "single" if k == 1 else ("dual/handover" if k == 2 else f"{k}-fold")
                         print(f"  k={k} ({tag}): " + (f"{mn} satellites" if mn is not None else "not reached"))
+                    if res.get("continuity_overlap_s") is not None:
+                        mn = res["min_N_mbb"]
+                        print(f"  k=1 make-before-break (≥{res['continuity_overlap_s']:g}s overlap): "
+                              + (f"{mn} satellites" if mn is not None else "not reached"))
                 else:
                     print("min N by inclination:")
                     for b in res["by_inclination"]:
@@ -352,24 +424,16 @@ class MinSatSweep:
                         if cand:
                             bi = min(cand, key=lambda x: x[1])
                             print(f"  best for k={k}: {bi[1]} satellites at {bi[0]:g}°")
-                _write_sweep_csv(res, mode, self.csv_path)
+                    if res.get("continuity_overlap_s") is not None:
+                        cand = [(b["inclination"], b["min_N_mbb"]) for b in res["by_inclination"]
+                                if b.get("min_N_mbb") is not None]
+                        if cand:
+                            bi = min(cand, key=lambda x: x[1])
+                            print(f"  best MBB (≥{res['continuity_overlap_s']:g}s): {bi[1]} sats at {bi[0]:g}°")
+                _write_sweep_csv(res, mode, self.csv_path, manifest=self._params())
                 print(f"wrote {self.csv_path}")
             self.status.value = "🖼️ rendering…"
-            with self.out_plot:
-                clear_output(wait=True)
-                try:
-                    from .viz.plots import (plot_min_sat_sweep, plot_inclination_sweep,
-                                            plot_inclination_coverage_curves)
-                    if mode == "coverage_vs_N":
-                        plot_min_sat_sweep(res)
-                        plt.show()
-                    else:
-                        plot_inclination_coverage_curves(res)   # coverage-vs-N per inclination
-                        plt.show()
-                        plot_inclination_sweep(res)              # min-N-vs-inclination summary
-                        plt.show()
-                except Exception:
-                    traceback.print_exc()
+            self._append_sweep_panel(mode, res)
             self.status.value = "✅ done"
             self.progress.bar_style = "success"
         except Exception:
@@ -381,25 +445,80 @@ class MinSatSweep:
             self.run_btn.disabled = False
             self.run_btn.description = "Run sweep"
 
+    def _params(self) -> dict:
+        """Full input parameter set for this sweep (saved into the CSV + shown per run)."""
+        gate = self.handover_gate.value
+        return {
+            "service_area": self.aor.value, "planes": self.planes.value,
+            "altitude_km": self.altitude.value, "phasing_F": self.phasing.value,
+            "incl_min": self.incl_min.value, "incl_max": self.incl_max.value,
+            "incl_step": self.incl_step.value, "spp_min": self.spp_min.value,
+            "spp_max": self.spp_max.value, "spp_step": self.spp_step.value,
+            "k_values": list(self.k_values.value), "target_availability": self.target_avail.value,
+            "area_grade": self.area_grade.value, "min_elev_deg": self.min_elev.value,
+            "h3_res": self.cell_res.value, "duration_min": self.duration_min.value,
+            "step_s": self.step_s.value, "sharding": self.use_shard.value,
+            "handover_gate": gate, "min_overlap_s": (self.overlap_s.value if gate else None),
+            "propagator": "KeplerJ2",
+        }
 
-def _write_sweep_csv(res: dict, mode: str, path: str):
+    def _append_sweep_panel(self, mode, res):
+        """Render this sweep's plot(s) into a fresh panel appended below previous runs, with a
+        header echoing the input parameters (previous runs are kept)."""
+        self._run_count += 1
+        n = self._run_count
+        box = w.Layout(border="1px solid #ccc", padding="6px", margin="2px", min_height="60px")
+        out = w.Output(layout=box)
+        with out:
+            clear_output(wait=True)
+            try:
+                from .viz.plots import (plot_min_sat_sweep, plot_inclination_sweep,
+                                        plot_inclination_coverage_curves)
+                if mode == "coverage_vs_N":
+                    fig = plot_min_sat_sweep(res)
+                    plt.show()
+                    plt.close(fig)
+                else:
+                    fig = plot_inclination_coverage_curves(res)   # coverage-vs-N per inclination
+                    plt.show()
+                    plt.close(fig)
+                    fig = plot_inclination_sweep(res)             # min-N-vs-inclination summary
+                    plt.show()
+                    plt.close(fig)
+            except Exception:
+                traceback.print_exc()
+        hdr = w.HTML(f"<b>Run {n}</b> ({mode}) — <span style='font-size:90%;color:#555'>"
+                     + " · ".join(f"{k}={v}" for k, v in self._params().items()) + "</span>")
+        self.runs_box.children = self.runs_box.children + (w.VBox([hdr, out]),)
+
+
+def _write_sweep_csv(res: dict, mode: str, path: str, manifest: dict | None = None):
     import csv
     ks = res["k_values"]
+    mbb = res.get("continuity_overlap_s") is not None
     with open(path, "w", newline="") as f:
         wr = csv.writer(f)
+        if manifest:
+            for k, v in manifest.items():
+                f.write(f"# {k}: {v}\n")
         if mode == "coverage_vs_N":
-            f.write(f"# min_N_by_k: {res['min_N_by_k']}  target_availability: {res['target_availability']}"
+            f.write(f"# min_N_by_k: {res['min_N_by_k']}  min_N_mbb: {res.get('min_N_mbb')}"
+                    f"  target_availability: {res['target_availability']}"
                     f"  area_grade: {res['area_grade']}  inclination: {res['inclination_deg']}\n")
             wr.writerow(["N", "planes", "sats_per_plane", "mean_sats_in_view"]
-                        + [f"pct_k{k}" for k in ks] + [f"mean_avail_k{k}" for k in ks])
+                        + [f"pct_k{k}" for k in ks] + [f"mean_avail_k{k}" for k in ks]
+                        + (["pct_mbb", "mbb_pass"] if mbb else []))
             for r in res["sweep"]:
                 wr.writerow([r["N"], r["planes"], r["sats_per_plane"], f"{r['mean_sats_in_view']:.6f}"]
                             + [f"{r['pct_by_k'][k]:.6f}" for k in ks]
-                            + [f"{r['mean_avail_by_k'][k]:.6f}" for k in ks])
+                            + [f"{r['mean_avail_by_k'][k]:.6f}" for k in ks]
+                            + ([f"{r['pct_mbb']:.6f}", int(r['mbb_pass'])] if mbb else []))
         else:  # min_N_vs_incl
             f.write(f"# target_availability: {res['target_availability']}  area_grade: {res['area_grade']}"
                     f"  planes: {res['planes']}  altitude_km: {res['altitude_km']}\n")
-            wr.writerow(["inclination_deg"] + [f"min_N_k{k}" for k in ks])
+            wr.writerow(["inclination_deg"] + [f"min_N_k{k}" for k in ks]
+                        + (["min_N_mbb"] if mbb else []))
             for b in res["by_inclination"]:
-                wr.writerow([b["inclination"]] + [b["min_N_by_k"][k] for k in ks])
+                wr.writerow([b["inclination"]] + [b["min_N_by_k"][k] for k in ks]
+                            + ([b.get("min_N_mbb")] if mbb else []))
 
