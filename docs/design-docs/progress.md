@@ -89,10 +89,13 @@ or move to Slice B (capacity/link budget).
     - **SA12**: `ConstellationModel` SoA + generators (Walker byte-identical shim, explicit-planes,
       phase-slot/lattice, multi-shell concat); `config.GeneralizedShell` + `constellation_model()`;
       `run_coverage_h3_elements` seam + apoapsis `max_alt`.
-    - **SA13**: full `ContinuityRequirement` (different-plane rule, merged-interval worst-gap);
-      `coverage/refine.py` bisection endpoint-refinement; Nyquist precondition; resolution metadata.
-      **Deferred**: full §6 event bracketing across all crossings, rigorous k≥2 continuum verdict,
-      worst link margin → Slice B.
+    - **SA13** (◐ partial): LIVE end-to-end = grid-quantized detection + different-**sat** gate +
+      Nyquist precondition + resolution metadata. **Built + unit-tested but NOT wired into
+      `run_coverage_h3`** (core-ready seams; `plane_uid` threaded but unused): different-**plane**
+      rule + merged worst-gap (`mbb_continuity_cell_req`) and sub-second refinement
+      (`coverage/refine.py`) → the "authoritative refined gate" is not yet realized in the pipeline.
+      **Inert `SimConfig` knobs** (no consumer): `max_buffered_gap_s`, `min_target_dwell_s`,
+      `max_handover_rate_hz`, buffered-break. **Deferred**: §6 event bracketing, k≥2 continuum, link margin.
     - **SA14**: `multi_shape_sweep` 2D P×spp grid (cap, gate, Pareto/min-N); scatter + heatmap viz
       (lazy plotly); Explorer planes-range + multi_shape + CSV.
     (SA15 patent-shape screening: deferred/lower-priority; stub at `slice-a-patent-screening.md`)
