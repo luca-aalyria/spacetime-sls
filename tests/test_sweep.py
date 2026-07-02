@@ -109,6 +109,29 @@ def test_incl_values_granularity():
     assert incl_values(48.0, 48.0, 5.0) == [48.0]   # single inclination
 
 
+from ngso_sls.sweep import multi_shape_sweep
+import pytest
+
+
+def test_multi_shape_grid_and_pareto():
+    res = multi_shape_sweep(AORS["India"], planes_values=[4, 6], spp_values=[4, 8],
+                            altitude_km=650.0, inclination_deg=53.0, k_values=(1,),
+                            target_availability=0.9, area_grade=0.8, min_elev_deg=25.0,
+                            cell_res=2, duration_s=1200.0, step_s=60.0)
+    assert len(res["candidates"]) == 4
+    for c in res["candidates"]:
+        assert c["N"] == c["planes"] * c["sats_per_plane"]
+        assert 0.0 <= c["pct_by_k"][1] <= 1.0
+    assert set(res["candidates"][0]).issuperset({"N", "planes", "sats_per_plane", "is_pareto"})
+
+
+def test_multi_shape_grid_cap_refuses():
+    with pytest.raises(ValueError, match="max_grid_cells"):
+        multi_shape_sweep(AORS["India"], planes_values=list(range(1, 30)),
+                          spp_values=list(range(1, 30)), altitude_km=650.0,
+                          inclination_deg=53.0, max_grid_cells=256)
+
+
 def test_sweep_ui_single_and_range(tmp_path):
     from ngso_sls.explorer import MinSatSweep
     # single inclination -> coverage_vs_N mode

@@ -94,6 +94,63 @@ def min_sat_sweep(aor, planes, altitude_km, inclination_deg, sats_per_plane_valu
     }
 
 
+def multi_shape_sweep(aor, planes_values, spp_values, altitude_km, inclination_deg,
+                      min_elev_deg=25.0, k_values=(1, 2), target_availability=0.99,
+                      area_grade=0.95, cell_res=3, duration_s=3600.0, step_s=60.0, phasing=1,
+                      use_sharding=True, handover_gate=False, continuity_overlap_s=None,
+                      max_grid_cells=256, propagator=None, progress=None) -> dict:
+    """2D sweep over planes x sats/plane (N = planes*spp). Each candidate: pct_by_k, and (gate on)
+    pct_mbb/mbb_pass. min_N_by_k + min_N_mbb; is_pareto by lexicographic order (constraints, then
+    min N, then min planes). Full grid always returned; refuses grids over `max_grid_cells`."""
+    Pv, Sv, ks = list(planes_values), list(spp_values), list(k_values)
+    if len(Pv) * len(Sv) > max_grid_cells:
+        raise ValueError(f"grid {len(Pv)}x{len(Sv)} exceeds max_grid_cells={max_grid_cells}; "
+                         f"coarsen the ranges or raise the cap")
+    overlap = continuity_overlap_s if handover_gate else None
+    total, done = len(Pv) * len(Sv), 0
+    cands = []
+    for P in Pv:
+        for spp in Sv:
+            shell = Shell("sweep", P * spp, P, min(phasing, P - 1), altitude_km,
+                          inclination_deg, min_elev_user_deg=min_elev_deg)
+            sim = SimConfig(Constellation((shell,)),
+                            TimeGrid(_EPOCH, duration_s=duration_s, step_s=step_s), k_coverage=ks[0])
+            res = run_coverage_h3(sim, aor, cell_res=cell_res,
+                                  shard_res=(1 if use_sharding else None), chunk_steps=10,
+                                  propagator=propagator, k_values=ks, continuity_overlap_s=overlap)
+            abk = res["availability_by_k"]
+            c = {"N": P * spp, "planes": P, "sats_per_plane": spp,
+                 "mean_sats_in_view": float(res["sats_in_view_mean"].mean()),
+                 "pct_by_k": {k: float((abk[k] >= target_availability).mean()) for k in ks},
+                 "is_pareto": False}
+            if overlap is not None:
+                c["pct_mbb"] = float(res["mbb_feasible"].mean())
+                c["mbb_pass"] = bool(c["pct_mbb"] >= area_grade)
+            cands.append(c)
+            done += 1
+            if progress is not None:
+                progress(done, total)
+
+    def passes(c):
+        ok = all(c["pct_by_k"][k] >= area_grade for k in ks)
+        return ok and (c.get("mbb_pass", True) if overlap is not None else ok)
+
+    winners = [c for c in cands if passes(c)]
+    winners.sort(key=lambda c: (c["N"], c["planes"]))          # lexicographic (ref §9)
+    if winners:
+        winners[0]["is_pareto"] = True
+    min_N_by_k = {}
+    for k in ks:
+        m = [c["N"] for c in cands if c["pct_by_k"][k] >= area_grade]
+        min_N_by_k[k] = min(m) if m else None
+    min_N_mbb = (min([c["N"] for c in cands if c.get("mbb_pass")], default=None)
+                 if overlap is not None else None)
+    return {"candidates": cands, "min_N_by_k": min_N_by_k, "min_N_mbb": min_N_mbb,
+            "continuity_overlap_s": overlap, "k_values": ks, "planes_values": Pv,
+            "spp_values": Sv, "target_availability": target_availability, "area_grade": area_grade,
+            "altitude_km": altitude_km, "inclination_deg": inclination_deg}
+
+
 def inclination_sweep(aor, planes, altitude_km, inclination_values, sats_per_plane_values,
                       min_elev_deg=25.0, k_values=(1, 2), target_availability=0.99, area_grade=0.95,
                       cell_res=3, duration_s=3600.0, step_s=60.0, phasing=1, use_sharding=True,
