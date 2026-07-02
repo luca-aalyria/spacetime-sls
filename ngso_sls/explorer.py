@@ -76,7 +76,7 @@ class CoverageExplorer:
         self.cell_res = w.IntSlider(value=3, min=1, max=5, description="H3 resolution", style=s, layout=L)
         self.duration_min = w.FloatSlider(value=60, min=10, max=240, step=10, description="Duration min", style=s, layout=L)
         self.step_s = w.FloatSlider(value=60, min=10, max=120, step=10, description="Time step s", style=s, layout=L)
-        self.k_cov = w.IntSlider(value=1, min=1, max=30, description="k (min sats in view)",
+        self.k_cov = w.IntSlider(value=2, min=1, max=30, description="k (min sats in view)",
                                  style=wide, layout=w.Layout(width="360px"))
         self.use_shard = w.Checkbox(value=True, description="Use sharding (faster, identical result)")
         self.hex_alpha = w.FloatSlider(value=0.80, min=0.1, max=1.0, step=0.05,
@@ -222,7 +222,9 @@ class MinSatSweep:
         self.aor = w.Dropdown(options=list(AORS), value="India", description="Service area", style=s, layout=L)
         self.planes = w.IntSlider(value=40, min=1, max=60, description="Planes", style=s, layout=L)
         self.altitude = w.FloatSlider(value=650, min=300, max=1500, step=10, description="Altitude km", style=s, layout=L)
-        self.inclination = w.FloatSlider(value=48, min=0, max=90, step=1, description="Inclination deg", style=s, layout=L)
+        self.incl_min = w.FloatSlider(value=48, min=0, max=90, step=0.1, description="Inclination min °", style=s, layout=L)
+        self.incl_max = w.FloatSlider(value=48, min=0, max=90, step=0.1, description="Inclination max °", style=s, layout=L)
+        self.incl_step = w.FloatSlider(value=5.0, min=0.1, max=30.0, step=0.1, description="Inclination step °", style=s, layout=L)
         self.phasing = w.IntSlider(value=1, min=0, max=59, description="Phasing F", style=s, layout=L)
         self.spp_min = w.IntSlider(value=5, min=1, max=40, description="sats/plane min", style=s, layout=L)
         self.spp_max = w.IntSlider(value=30, min=1, max=40, description="sats/plane max", style=s, layout=L)
@@ -246,9 +248,12 @@ class MinSatSweep:
         self.controls = w.VBox([
             _lbl("Minimum-satellite sweep — base shell (single Walker shell, thinned by sats/plane)"),
             w.HBox([self.aor, self.planes]),
-            w.HBox([self.altitude, self.inclination]),
-            w.HBox([self.phasing, self.k_values]),
-            _lbl("Sweep range (total N = planes x sats/plane)"),
+            w.HBox([self.altitude, self.phasing]),
+            _lbl("Inclination range (min, max, step ≥ 0.1°; a range compares inclinations)"),
+            w.HBox([self.incl_min, self.incl_max, self.incl_step]),
+            _lbl("Coverage levels & sweep range (total N = planes x sats/plane)"),
+            w.HBox([self.k_values]),
+            _lbl("Sweep range (sats/plane)"),
             w.HBox([self.spp_min, self.spp_max, self.spp_step]),
             _lbl("Coverage grade & analysis"),
             w.HBox([self.target_avail, self.area_grade]),
@@ -261,17 +266,25 @@ class MinSatSweep:
         self.results = w.VBox([_lbl("Sweep log"), self.out_log,
                                _titled("Coverage vs constellation size", self.out_plot)])
 
-    def compute(self, progress=None) -> dict:
-        from .sweep import min_sat_sweep
+    def compute(self, progress=None):
+        """Returns (mode, result, inclinations). mode is 'coverage_vs_N' for a single inclination,
+        or 'min_N_vs_incl' for an inclination range."""
+        from .sweep import min_sat_sweep, inclination_sweep, incl_values
         spp = list(range(self.spp_min.value, self.spp_max.value + 1, self.spp_step.value))
-        ks = tuple(self.k_values.value) or (1,)
-        return min_sat_sweep(
-            AORS[self.aor.value], self.planes.value, self.altitude.value, self.inclination.value,
-            spp, min_elev_deg=self.min_elev.value, k_values=ks,
-            target_availability=self.target_avail.value, area_grade=self.area_grade.value,
-            cell_res=self.cell_res.value, duration_s=self.duration_min.value * 60.0,
-            step_s=self.step_s.value, phasing=self.phasing.value,
-            use_sharding=self.use_shard.value, progress=progress)
+        ks = tuple(self.k_values.value) or (2,)
+        incs = incl_values(self.incl_min.value, self.incl_max.value, self.incl_step.value)
+        common = dict(min_elev_deg=self.min_elev.value, k_values=ks,
+                      target_availability=self.target_avail.value, area_grade=self.area_grade.value,
+                      cell_res=self.cell_res.value, duration_s=self.duration_min.value * 60.0,
+                      step_s=self.step_s.value, phasing=self.phasing.value,
+                      use_sharding=self.use_shard.value, progress=progress)
+        if len(incs) <= 1:
+            res = min_sat_sweep(AORS[self.aor.value], self.planes.value, self.altitude.value,
+                                incs[0], spp, **common)
+            return "coverage_vs_N", res, incs
+        res = inclination_sweep(AORS[self.aor.value], self.planes.value, self.altitude.value,
+                                incs, spp, **common)
+        return "min_N_vs_incl", res, incs
 
     def run(self, _=None):
         self.run_btn.disabled = True
@@ -287,37 +300,49 @@ class MinSatSweep:
         try:
             with self.out_log:
                 clear_output(wait=True)
-                ks = tuple(self.k_values.value) or (1,)
-                n = len(range(self.spp_min.value, self.spp_max.value + 1, self.spp_step.value))
-                print(f"Sweeping {n} constellations over {self.aor.value} "
-                      f"({self.planes.value} planes @ {self.inclination.value:g}°/{self.altitude.value:g}km, "
-                      f"k={list(ks)})…")
-                res = self.compute(progress=_progress)
-                self.last_result = res
-                for r in res["sweep"]:
-                    parts = "  ".join(f"k{k}={r['pct_by_k'][k]:.0%}" for k in res["k_values"])
-                    print(f"  N={r['N']:>5} ({r['sats_per_plane']:>2}/plane)  cells≥{res['target_availability']:.0%}avail: "
-                          f"[{parts}]  sats-in-view={r['mean_sats_in_view']:.1f}")
-                print(f"\nMinimum N for {res['area_grade']:.0%} of {self.aor.value} at "
-                      f"{res['target_availability']:.0%} availability:")
-                for k in res["k_values"]:
-                    mn = res["min_N_by_k"][k]
-                    tag = "single coverage" if k == 1 else ("dual/handover" if k == 2 else f"{k}-fold")
-                    print(f"  k={k} ({tag}): " + (f"{mn} satellites" if mn is not None else "not reached in range"))
-                _write_sweep_csv(res, self.csv_path)
+                from .sweep import incl_values
+                ks = tuple(self.k_values.value) or (2,)
+                incs = incl_values(self.incl_min.value, self.incl_max.value, self.incl_step.value)
+                n_spp = len(range(self.spp_min.value, self.spp_max.value + 1, self.spp_step.value))
+                print(f"Sweeping {len(incs)} inclination(s) x {n_spp} sizes over {self.aor.value} "
+                      f"({self.planes.value} planes @ {self.altitude.value:g}km, k={list(ks)})…")
+                mode, res, incs = self.compute(progress=_progress)
+                self.last_result, self.last_mode = res, mode
+                if mode == "coverage_vs_N":
+                    for r in res["sweep"]:
+                        parts = "  ".join(f"k{k}={r['pct_by_k'][k]:.0%}" for k in res["k_values"])
+                        print(f"  N={r['N']:>5} ({r['sats_per_plane']:>2}/plane)  "
+                              f"cells≥{res['target_availability']:.0%}avail:[{parts}]  siv={r['mean_sats_in_view']:.1f}")
+                    print(f"\nMin N for {res['area_grade']:.0%} of {self.aor.value} @ "
+                          f"{res['target_availability']:.0%} avail (incl {res['inclination_deg']:g}°):")
+                    for k in res["k_values"]:
+                        mn = res["min_N_by_k"][k]
+                        tag = "single" if k == 1 else ("dual/handover" if k == 2 else f"{k}-fold")
+                        print(f"  k={k} ({tag}): " + (f"{mn} satellites" if mn is not None else "not reached"))
+                else:
+                    print("min N by inclination:")
+                    for b in res["by_inclination"]:
+                        parts = "  ".join(f"k{k}={b['min_N_by_k'][k] if b['min_N_by_k'][k] is not None else '—'}"
+                                          for k in res["k_values"])
+                        print(f"  {b['inclination']:>5.1f}°:  {parts}")
+                    for k in res["k_values"]:
+                        cand = [(b["inclination"], b["min_N_by_k"][k]) for b in res["by_inclination"]
+                                if b["min_N_by_k"][k] is not None]
+                        if cand:
+                            bi = min(cand, key=lambda x: x[1])
+                            print(f"  best for k={k}: {bi[1]} satellites at {bi[0]:g}°")
+                _write_sweep_csv(res, mode, self.csv_path)
                 print(f"wrote {self.csv_path}")
             self.status.value = "🖼️ rendering…"
             with self.out_plot:
                 clear_output(wait=True)
                 try:
-                    from .viz.plots import plot_min_sat_sweep
-                    plot_min_sat_sweep(res)
+                    from .viz.plots import plot_min_sat_sweep, plot_inclination_sweep
+                    (plot_min_sat_sweep if mode == "coverage_vs_N" else plot_inclination_sweep)(res)
                     plt.show()
                 except Exception:
                     traceback.print_exc()
-            self.status.value = "✅ done — min N: " + ", ".join(
-                f"k{k}={res['min_N_by_k'][k] if res['min_N_by_k'][k] is not None else '—'}"
-                for k in res["k_values"])
+            self.status.value = "✅ done"
             self.progress.bar_style = "success"
         except Exception:
             with self.out_log:
@@ -329,17 +354,24 @@ class MinSatSweep:
             self.run_btn.description = "Run sweep"
 
 
-def _write_sweep_csv(res: dict, path: str):
+def _write_sweep_csv(res: dict, mode: str, path: str):
     import csv
     ks = res["k_values"]
     with open(path, "w", newline="") as f:
-        f.write(f"# min_N_by_k: {res['min_N_by_k']}  target_availability: {res['target_availability']}"
-                f"  area_grade: {res['area_grade']}\n")
         wr = csv.writer(f)
-        wr.writerow(["N", "planes", "sats_per_plane", "mean_sats_in_view"]
-                    + [f"pct_k{k}" for k in ks] + [f"mean_avail_k{k}" for k in ks])
-        for r in res["sweep"]:
-            wr.writerow([r["N"], r["planes"], r["sats_per_plane"], f"{r['mean_sats_in_view']:.6f}"]
-                        + [f"{r['pct_by_k'][k]:.6f}" for k in ks]
-                        + [f"{r['mean_avail_by_k'][k]:.6f}" for k in ks])
+        if mode == "coverage_vs_N":
+            f.write(f"# min_N_by_k: {res['min_N_by_k']}  target_availability: {res['target_availability']}"
+                    f"  area_grade: {res['area_grade']}  inclination: {res['inclination_deg']}\n")
+            wr.writerow(["N", "planes", "sats_per_plane", "mean_sats_in_view"]
+                        + [f"pct_k{k}" for k in ks] + [f"mean_avail_k{k}" for k in ks])
+            for r in res["sweep"]:
+                wr.writerow([r["N"], r["planes"], r["sats_per_plane"], f"{r['mean_sats_in_view']:.6f}"]
+                            + [f"{r['pct_by_k'][k]:.6f}" for k in ks]
+                            + [f"{r['mean_avail_by_k'][k]:.6f}" for k in ks])
+        else:  # min_N_vs_incl
+            f.write(f"# target_availability: {res['target_availability']}  area_grade: {res['area_grade']}"
+                    f"  planes: {res['planes']}  altitude_km: {res['altitude_km']}\n")
+            wr.writerow(["inclination_deg"] + [f"min_N_k{k}" for k in ks])
+            for b in res["by_inclination"]:
+                wr.writerow([b["inclination"]] + [b["min_N_by_k"][k] for k in ks])
 

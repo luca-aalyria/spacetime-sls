@@ -157,6 +157,25 @@ def plot_min_sat_sweep(sweep: dict):
     return fig
 
 
+def plot_inclination_sweep(result: dict):
+    """Minimum satellites N vs inclination, one line per k (gaps where the target is not reached
+    within the swept range). Identifies the inclination that minimizes the constellation size."""
+    incs = result["inclinations"]
+    colors = {1: "tab:blue", 2: "tab:orange", 3: "tab:green", 4: "tab:red"}
+    fig, ax = plt.subplots(figsize=(7.5, 5))
+    for k in result["k_values"]:
+        y = [b["min_N_by_k"][k] for b in result["by_inclination"]]
+        y = [np.nan if v is None else v for v in y]         # 'not reached' -> gap
+        ax.plot(incs, y, "-o", ms=5, color=colors.get(k), label=f"k={k} min N")
+    ax.set_xlabel("inclination (deg)")
+    ax.set_ylabel("minimum satellites N")
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=8)
+    ax.set_title(f"Minimum N vs inclination ({result['planes']} planes @ {result['altitude_km']:g} km; "
+                 f"{result['area_grade']:.0%} of area @ {result['target_availability']:.0%} avail)")
+    return fig
+
+
 def plot_availability_hist(res: dict, bins: int = 20):
     """Distribution of per-cell coverage availability (matplotlib)."""
     fig, ax = plt.subplots(figsize=(6, 4))

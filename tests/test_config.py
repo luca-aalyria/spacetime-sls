@@ -11,5 +11,5 @@ def test_timegrid_times():
 def test_simconfig_defaults():
     sh = Shell("p", 1200, 40, 1, 650.0, 48.0)
     sc = SimConfig(Constellation((sh,)), TimeGrid(datetime(2026, 1, 1, tzinfo=timezone.utc), 30.0))
-    assert sc.k_coverage == 1 and sc.target_availability is None and sc.cell_layout == "UNSPEC"
+    assert sc.k_coverage == 2 and sc.target_availability is None and sc.cell_layout == "UNSPEC"
     assert sh.min_elev_user_deg == 25.0

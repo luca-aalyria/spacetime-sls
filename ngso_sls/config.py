@@ -41,5 +41,5 @@ class SimConfig:
     time_grid: TimeGrid
     seed: int = 0
     target_availability: float | None = None
-    k_coverage: int = 1
+    k_coverage: int = 2  # default: >=2 sats in view (supports inter-satellite handover)
     cell_layout: str = "UNSPEC"  # EFC|QEFC|EMC|UNSPEC — inert metadata (SA8)

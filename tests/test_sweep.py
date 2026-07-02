@@ -50,16 +50,43 @@ def test_min_sat_sweep_plot():
     assert len(plot_min_sat_sweep(sweep).axes) >= 1
 
 
-def test_min_sat_sweep_ui(tmp_path):
+def test_inclination_sweep_engine():
+    from ngso_sls.sweep import inclination_sweep, incl_values
+    incs = incl_values(48.0, 53.0, 5.0)
+    assert incs == [48.0, 53.0]
+    calls = []
+    res = inclination_sweep(AORS["India"], planes=40, altitude_km=650.0,
+                            inclination_values=incs, sats_per_plane_values=[10, 20],
+                            k_values=(1, 2), target_availability=0.9, area_grade=0.9,
+                            cell_res=2, duration_s=300.0, step_s=60.0,
+                            progress=lambda d, t: calls.append((d, t)))
+    assert [b["inclination"] for b in res["by_inclination"]] == [48.0, 53.0]
+    assert all(set(b["min_N_by_k"]) == {1, 2} for b in res["by_inclination"])
+    assert calls[-1] == (4, 4)                      # 2 inclinations x 2 sizes
+
+
+def test_incl_values_granularity():
+    from ngso_sls.sweep import incl_values
+    assert incl_values(50.0, 50.5, 0.1) == [50.0, 50.1, 50.2, 50.3, 50.4, 50.5]
+    assert incl_values(48.0, 48.0, 5.0) == [48.0]   # single inclination
+
+
+def test_sweep_ui_single_and_range(tmp_path):
     from ngso_sls.explorer import MinSatSweep
+    # single inclination -> coverage_vs_N mode
     ui = MinSatSweep(csv_path=str(tmp_path / "s.csv"))
     ui.planes.value = 40
-    ui.spp_min.value, ui.spp_max.value, ui.spp_step.value = 10, 20, 10   # -> [10, 20]
+    ui.spp_min.value, ui.spp_max.value, ui.spp_step.value = 10, 20, 10
     ui.k_values.value = (1, 2)
     ui.cell_res.value = 2
-    ui.duration_min.value = 10.0
+    ui.duration_min.value = 5.0
+    ui.incl_min.value = ui.incl_max.value = 48.0
     ui.run()
-    assert ui.last_result is not None
+    assert ui.last_mode == "coverage_vs_N"
     assert set(ui.last_result["min_N_by_k"]) == {1, 2}
-    assert (tmp_path / "s.csv").exists()
-    assert ui.run_btn.disabled is False
+    assert (tmp_path / "s.csv").exists() and ui.run_btn.disabled is False
+    # inclination range -> min_N_vs_incl mode
+    ui.incl_min.value, ui.incl_max.value, ui.incl_step.value = 48.0, 53.0, 5.0
+    ui.run()
+    assert ui.last_mode == "min_N_vs_incl"
+    assert [b["inclination"] for b in ui.last_result["by_inclination"]] == [48.0, 53.0]
