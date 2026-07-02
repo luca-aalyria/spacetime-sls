@@ -4,8 +4,8 @@ from .constellation.walker import walker_elements
 from .propagation.kepler_j2 import KeplerJ2Propagator
 from .geometry.frames import gmst_rad, eci_to_ecef, geodetic_to_ecef, enu_up
 from .geometry.access import elevation_deg
-from .grids.aor import latlon_grid
-from .grids.h3_grid import h3_cells_for_bbox, cell_circumradius_deg
+from .grids.aor import latlon_grid, aor_bbox
+from .grids.h3_grid import h3_cells_for_aor, cell_circumradius_deg
 from .grids.shards import assign_shards
 from .coverage.visibility import max_elev_and_count
 from .coverage.availability import availability
@@ -25,7 +25,8 @@ def run_coverage(sim: SimConfig, aor: dict, grid_step_deg: float, propagator=Non
     r_eci = propagator.propagate(elems, times)
     gmst = gmst_rad(sim.time_grid.epoch_utc, times)
     r_ecef = eci_to_ecef(r_eci, gmst)
-    lat, lon = latlon_grid(aor["lat_min"], aor["lat_max"], aor["lon_min"], aor["lon_max"], grid_step_deg)
+    b = aor_bbox(aor)
+    lat, lon = latlon_grid(b["lat_min"], b["lat_max"], b["lon_min"], b["lon_max"], grid_step_deg)
     cell_ecef = geodetic_to_ecef(lat, lon)
     cell_up = enu_up(lat, lon)
     elev = elevation_deg(cell_ecef, cell_up, r_ecef)
@@ -57,9 +58,7 @@ def run_coverage_h3(
     times = sim.time_grid.times_s()
     n_time = len(times)
 
-    cells, lat, lon = h3_cells_for_bbox(
-        aor["lat_min"], aor["lat_max"], aor["lon_min"], aor["lon_max"], cell_res
-    )
+    cells, lat, lon = h3_cells_for_aor(aor, cell_res)
     n_cell = len(cells)
 
     r_eci = propagator.propagate(elems, times)

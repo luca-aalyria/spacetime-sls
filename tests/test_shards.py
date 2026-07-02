@@ -6,7 +6,7 @@ from ngso_sls.grids.aor import INDIA_AOR
 
 
 def test_single_owner_partition():
-    cells, _, _ = h3_cells_for_bbox(**INDIA_AOR, res=4)
+    cells, _, _ = h3_cells_for_bbox(**INDIA_AOR["bbox"], res=4)
     groups, shard_of = assign_shards(cells, shard_res=2)
     assert len(shard_of) == len(cells)
     # every cell belongs to exactly one shard; groups partition the index set
@@ -21,6 +21,6 @@ def test_single_owner_partition():
 
 
 def test_shard_res_must_be_coarser():
-    cells, _, _ = h3_cells_for_bbox(**INDIA_AOR, res=3)
+    cells, _, _ = h3_cells_for_bbox(**INDIA_AOR["bbox"], res=3)
     with pytest.raises(ValueError):
         assign_shards(cells, shard_res=5)

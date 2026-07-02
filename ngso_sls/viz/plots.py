@@ -1,40 +1,31 @@
-import json
-from importlib.resources import files
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection, LineCollection
 import h3
 import plotly.graph_objects as go
 
-_WORLD_BORDERS = None
+from ..geodata import all_border_rings
 
-
-def _world_borders():
-    """Lazily load bundled low-res country-border polylines ([[lon,lat],...] rings)."""
-    global _WORLD_BORDERS
-    if _WORLD_BORDERS is None:
-        with files("ngso_sls.data").joinpath("world_borders.json").open("r") as f:
-            _WORLD_BORDERS = json.load(f)["rings"]
-    return _WORLD_BORDERS
+_HEX_ALPHA = 0.55  # let country borders show through the coverage cells
 
 
 def _draw_borders(ax):
-    ax.add_collection(LineCollection(_world_borders(), colors="0.35", linewidths=0.4, zorder=1))
+    ax.add_collection(LineCollection(all_border_rings(), colors="0.25", linewidths=0.5, zorder=3))
 
 
 def _hexmap(res, values, label, title, cmap, vmin=None, vmax=None):
-    """2D geographic map (matplotlib): H3 cells as hexagons colored by `values`, over country
-    borders. Renders reliably in Colab/Jupyter (plain matplotlib, no JS, no map downloads)."""
+    """2D geographic map (matplotlib): H3 cells as translucent hexagons colored by `values`,
+    over country borders. Renders reliably in Colab/Jupyter (plain matplotlib, no JS/downloads)."""
     polys = []
     for c in res["cells"]:
         # h3 boundary is [(lat, lng), ...]; matplotlib wants (x=lon, y=lat)
         polys.append([(lng, lat) for (lat, lng) in h3.cell_to_boundary(c)])
     pc = PolyCollection(polys, array=np.asarray(values, dtype=float), cmap=cmap,
-                        edgecolors="face", linewidths=0.2, zorder=2)
+                        edgecolors="none", alpha=_HEX_ALPHA, zorder=2)
     pc.set_clim(vmin if vmin is not None else float(np.min(values)),
                 vmax if vmax is not None else float(np.max(values)))
     fig, ax = plt.subplots(figsize=(8, 6))
-    _draw_borders(ax)               # country outlines underneath the coverage hexes
+    _draw_borders(ax)               # country outlines (drawn above the translucent hexes too)
     ax.add_collection(pc)
     # frame the Area of Responsibility (padded), so the service area fills the view
     lon, lat = np.asarray(res["lon"]), np.asarray(res["lat"])
@@ -57,9 +48,10 @@ def plot_coverage_hexmap(res: dict, title: str = "Coverage availability"):
                    cmap="RdYlGn", vmin=0.0, vmax=1.0)
 
 
-def plot_sats_in_view_hexmap(res: dict, title: str = "Mean satellites in view"):
-    """Geographic map of mean number of satellites in view (>= min elev) per cell."""
-    return _hexmap(res, res["sats_in_view_mean"], "mean satellites in view", title,
+def plot_sats_in_view_hexmap(res: dict, title: str = "Mean satellites in view (time-avg)"):
+    """Geographic map of the time-averaged number of satellites in view (>= min elev) per cell.
+    (Instantaneously the count is an integer; this is its mean over the run's timesteps.)"""
+    return _hexmap(res, res["sats_in_view_mean"], "mean satellites in view (time-avg)", title,
                    cmap="viridis", vmin=0.0, vmax=None)
 
 
@@ -127,7 +119,7 @@ def plot_sats_in_view_vs_latitude(res: dict, bin_deg: float = 1.0):
             means.append(siv[m].mean())
     fig, ax = plt.subplots(figsize=(6, 5))
     ax.plot(means, centers, "-o", ms=3, color="tab:blue")
-    ax.set_xlabel("mean satellites in view (≥ min elev)")
+    ax.set_xlabel("mean satellites in view (time-avg, ≥ min elev)")
     ax.set_ylabel("latitude (°)")
     ax.set_title("Satellites in view vs latitude")
     ax.grid(True, alpha=0.3)

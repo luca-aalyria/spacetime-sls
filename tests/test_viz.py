@@ -31,10 +31,10 @@ def test_matplotlib_plots_return_figures():
 
 
 def test_world_borders_bundled():
-    from ngso_sls.viz.plots import _world_borders
-    rings = _world_borders()
-    assert len(rings) > 100                       # ~289 border rings bundled
-    assert len(rings[0][0]) == 2                  # each point is [lon, lat]
+    from ngso_sls.geodata import all_border_rings, country_polygons
+    assert len(all_border_rings()) > 100          # ~289 border rings bundled
+    assert len(all_border_rings()[0][0]) == 2     # each point is [lon, lat]
+    assert len(country_polygons("India")) >= 1     # India polygon present
 
 
 def test_plotly_geo_map_returns_figure():

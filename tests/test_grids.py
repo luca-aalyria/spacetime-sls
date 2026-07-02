@@ -8,5 +8,6 @@ def test_latlon_grid_counts_and_bounds():
     assert lat.min() == 0.0 and lat.max() == 2.0
 
 
-def test_india_aor_keys():
-    assert set(INDIA_AOR) == {"lat_min", "lat_max", "lon_min", "lon_max"}
+def test_india_aor_is_country_spec():
+    assert INDIA_AOR["country"] == "India"
+    assert set(INDIA_AOR["bbox"]) == {"lat_min", "lat_max", "lon_min", "lon_max"}
