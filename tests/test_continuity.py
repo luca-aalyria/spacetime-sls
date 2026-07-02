@@ -110,3 +110,26 @@ def test_pipeline_continuity_sharded_equals_monolithic():
     assert np.array_equal(mono["mbb_feasible"], shard["mbb_feasible"])
     assert np.array_equal(mono["mbb_n_handovers"], shard["mbb_n_handovers"])
     assert np.array_equal(mono["mbb_overlap_worst_s"], shard["mbb_overlap_worst_s"])
+
+
+def test_pipeline_different_plane_is_stricter_and_reports_gap():
+    sim = _small_sim()
+    base = run_coverage_h3(sim, AORS["India"], cell_res=2, shard_res=1, chunk_steps=5,
+                           continuity_overlap_s=30.0)
+    dp = run_coverage_h3(sim, AORS["India"], cell_res=2, shard_res=1, chunk_steps=5,
+                         continuity_overlap_s=30.0, require_different_plane=True)
+    # different-plane is at least as strict: dp-feasible implies base-feasible (bool <=)
+    assert np.all(dp["mbb_feasible"] <= base["mbb_feasible"])
+    # worst-gap is now always reported (seconds); >=0 everywhere
+    assert "mbb_worst_gap_s" in dp and dp["mbb_worst_gap_s"].shape == (len(dp["cells"]),)
+    assert np.all(dp["mbb_worst_gap_s"] >= 0.0)
+
+
+def test_pipeline_different_plane_sharded_equals_monolithic():
+    sim = _small_sim()
+    mono = run_coverage_h3(sim, AORS["India"], cell_res=2, shard_res=None,
+                           continuity_overlap_s=30.0, require_different_plane=True)
+    shard = run_coverage_h3(sim, AORS["India"], cell_res=2, shard_res=1, chunk_steps=4,
+                            continuity_overlap_s=30.0, require_different_plane=True)
+    assert np.array_equal(mono["mbb_feasible"], shard["mbb_feasible"])
+    assert np.array_equal(mono["mbb_worst_gap_s"], shard["mbb_worst_gap_s"])

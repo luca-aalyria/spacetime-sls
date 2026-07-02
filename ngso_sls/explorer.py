@@ -98,6 +98,8 @@ class CoverageExplorer:
                                         description="k=1 make-before-break gate (min 2-sat overlap)")
         self.overlap_s = w.FloatSlider(value=20, min=0, max=180, step=5,
                                        description="Min 2-sat overlap s", style=s, layout=L)
+        self.require_diff_plane = w.Checkbox(value=False,
+                                             description="Require different plane at handover")
         self.run_btn = w.Button(description="Run simulation", button_style="primary", icon="play")
         self.progress = w.IntProgress(value=0, min=0, max=1, bar_style="info",
                                       layout=w.Layout(width="260px"))
@@ -125,6 +127,7 @@ class CoverageExplorer:
             _lbl("Handover continuity (k=1 make-before-break: continuous single coverage "
                  "+ a ≥ overlap 2-sat window at every handover)"),
             w.HBox([self.handover_gate, self.overlap_s]),
+            w.HBox([self.require_diff_plane]),
             w.HBox([self.hex_alpha, self.terrain_on]),
             w.HBox([self.terrain_source]),
             self.run_btn,
@@ -171,7 +174,8 @@ class CoverageExplorer:
         overlap = self.overlap_s.value if self.handover_gate.value else None
         res = run_coverage_h3(sim, AORS[self.aor.value], cell_res=self.cell_res.value,
                               shard_res=(1 if self.use_shard.value else None), chunk_steps=10,
-                              progress=progress, terrain=terrain, continuity_overlap_s=overlap)
+                              progress=progress, terrain=terrain, continuity_overlap_s=overlap,
+                              require_different_plane=self.require_diff_plane.value)
         res["_sim"] = sim
         res["_total_sats"] = sum(s.walker_T for s in cons.shells)
         res["_shape"] = "; ".join(
@@ -190,6 +194,7 @@ class CoverageExplorer:
             "k_coverage": self.k_cov.value, "sharding": self.use_shard.value,
             "handover_gate": self.handover_gate.value,
             "min_overlap_s": (self.overlap_s.value if self.handover_gate.value else None),
+            "require_different_plane": self.require_diff_plane.value,
             "terrain": (self.terrain_source.value if self.terrain_on.value else "off"),
             "epoch_utc": _EPOCH.isoformat(), "propagator": "KeplerJ2", "seed": 0,
         }
