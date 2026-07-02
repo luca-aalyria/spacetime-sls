@@ -94,6 +94,12 @@ availability histogram. Engine returns `sats_in_view_mean`; AOR presets India/CO
 
 ## Next Steps
 
+0. **Slice E — Spacetime NBI integration STARTED (2026-07-02).** Decisions: read-only pull first;
+   `spacetime-api` client; endpoint-configurable (live / Spacebox / custom); first use-case = pull
+   NMTS network model + computed routes → run/compare SLS coverage. Constraint: sandbox can't
+   install `spacetime-api` (private index) or reach an instance → build with guarded imports + a
+   mock/recorded backend (offline-testable); live path runs in Colab. Design in progress
+   (`slice-e-spacetime-integration-design` adversarial workflow).
 1. (Owner) Push repo to a git remote so the notebook's `!git clone` works in Colab.
 2. **M7 — min-N sweep** (the headline Jio answer: reduce N / raise k until coverage drops; now
    feasible at fine H3 grids thanks to M3) — or **M4** (elevation sweep) / **M5** (terminals/UT).
