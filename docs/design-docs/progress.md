@@ -100,7 +100,10 @@ availability histogram. Engine returns `sats_in_view_mean`; AOR presets India/CO
     model; (SA13) make-before-break handover continuity (continuous k=1 + τ_overlap k≥2 windows at
     every transition; hybrid tensor + bisection-refined interval/handover-graph evaluator);
     (SA14) multi-shape P×spp sweep with 1D scatter + 2D heatmap and a k=1 handover-gate toggle
-    (red-flagged failures). Design being adversarially verified (workflow `wc6hit6je`). **Then**
+    (red-flagged failures). **Design DONE + adversarially verified** (workflow `wxiaf4yi2`, 9 agents,
+    4 lenses; all blockers folded — fidelity/scale honesty, physical-plane `plane_uid`, apoapsis
+    max_alt, in-core continuity confirmed): `slice-a-revisions.md`. **Awaiting owner approval →
+    writing-plans.** **Then**
     (SA15, deferred/lower-priority) patent-shape screening post-check — stub written
     (`slice-a-patent-screening.md`); consumes the SA12 model; engineering flag, not legal FTO.
     **Shipped incrementally ahead of the full design (2026-07-02, 66 tests):** k=1 make-before-break
