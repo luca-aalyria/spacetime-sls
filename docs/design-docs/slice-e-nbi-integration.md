@@ -1,6 +1,9 @@
 # Slice E — Live Spacetime/Minkowski NBI Integration (design)
 
-**Status:** design (adversarially verified — 7-agent workflow `wi2lk7ugy`, 3 skeptic lenses).
+**Status:** ⏸️ **PARKED** (2026-07-02) — design complete + adversarially verified (7-agent
+workflow `wi2lk7ugy`, 3 skeptic lenses; all blocker/major fixes folded in). Not yet
+implemented. Parked by owner to return to Slice A for substantial revisions first. Resume by
+running writing-plans against this doc.
 **Scope of this doc:** Increment-1 = **read-only pull**. No Create/Update/Delete is ever wired.
 
 ## Goal
