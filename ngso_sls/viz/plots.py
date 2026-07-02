@@ -1,26 +1,48 @@
+import json
+from importlib.resources import files
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.collections import PolyCollection
+from matplotlib.collections import PolyCollection, LineCollection
 import h3
 import plotly.graph_objects as go
 
+_WORLD_BORDERS = None
+
+
+def _world_borders():
+    """Lazily load bundled low-res country-border polylines ([[lon,lat],...] rings)."""
+    global _WORLD_BORDERS
+    if _WORLD_BORDERS is None:
+        with files("ngso_sls.data").joinpath("world_borders.json").open("r") as f:
+            _WORLD_BORDERS = json.load(f)["rings"]
+    return _WORLD_BORDERS
+
+
+def _draw_borders(ax):
+    ax.add_collection(LineCollection(_world_borders(), colors="0.35", linewidths=0.4, zorder=1))
+
 
 def _hexmap(res, values, label, title, cmap, vmin=None, vmax=None):
-    """2D geographic map (matplotlib): H3 cells as hexagons colored by `values`.
-    Renders reliably in Colab/Jupyter (plain matplotlib, no JS)."""
+    """2D geographic map (matplotlib): H3 cells as hexagons colored by `values`, over country
+    borders. Renders reliably in Colab/Jupyter (plain matplotlib, no JS, no map downloads)."""
     polys = []
     for c in res["cells"]:
         # h3 boundary is [(lat, lng), ...]; matplotlib wants (x=lon, y=lat)
         polys.append([(lng, lat) for (lat, lng) in h3.cell_to_boundary(c)])
-    pc = PolyCollection(
-        polys, array=np.asarray(values, dtype=float), cmap=cmap, edgecolors="face", linewidths=0.2
-    )
+    pc = PolyCollection(polys, array=np.asarray(values, dtype=float), cmap=cmap,
+                        edgecolors="face", linewidths=0.2, zorder=2)
     pc.set_clim(vmin if vmin is not None else float(np.min(values)),
                 vmax if vmax is not None else float(np.max(values)))
     fig, ax = plt.subplots(figsize=(8, 6))
+    _draw_borders(ax)               # country outlines underneath the coverage hexes
     ax.add_collection(pc)
-    ax.autoscale_view()
-    lat_mid = float(np.mean(res["lat"]))
+    # frame the Area of Responsibility (padded), so the service area fills the view
+    lon, lat = np.asarray(res["lon"]), np.asarray(res["lat"])
+    padx = max(2.0, 0.1 * (lon.max() - lon.min()))
+    pady = max(2.0, 0.1 * (lat.max() - lat.min()))
+    ax.set_xlim(lon.min() - padx, lon.max() + padx)
+    ax.set_ylim(lat.min() - pady, lat.max() + pady)
+    lat_mid = float(np.mean(lat))
     ax.set_aspect(1.0 / max(np.cos(np.radians(lat_mid)), 0.1))  # rough lon/lat distortion fix
     ax.set_xlabel("Longitude")
     ax.set_ylabel("Latitude")

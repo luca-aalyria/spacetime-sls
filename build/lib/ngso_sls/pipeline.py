@@ -84,6 +84,7 @@ def run_coverage_h3(
     bounds = [(i, min(i + chunk, n_time)) for i in range(0, n_time, chunk)]
 
     serviceable = np.zeros(n_cell, dtype=np.int64)
+    sat_sum = np.zeros(n_cell, dtype=np.int64)          # sum over time of sats-in-view per cell
     for cidx in shards.values():
         clat, clon = lat[cidx], lon[cidx]
         ce, cu = cell_ecef[cidx], cell_up[cidx]
@@ -99,6 +100,12 @@ def run_coverage_h3(
             elev = elevation_deg(ce, cu, re_chunk)           # (n_cellS, n_chunk, n_sat_s)
             nv = (elev >= min_elev).sum(axis=-1)             # (n_cellS, n_chunk)
             serviceable[cidx] += (nv >= sim.k_coverage).sum(axis=1)
+            sat_sum[cidx] += nv.sum(axis=1)
 
     avail = serviceable / n_time
-    return {"cells": cells, "lat": lat, "lon": lon, "availability": avail, "min_elev_deg": min_elev}
+    sats_in_view_mean = sat_sum / n_time
+    return {
+        "cells": cells, "lat": lat, "lon": lon,
+        "availability": avail, "sats_in_view_mean": sats_in_view_mean,
+        "min_elev_deg": min_elev,
+    }

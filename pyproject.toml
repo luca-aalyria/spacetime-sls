@@ -15,3 +15,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["ngso_sls*"]
+
+[tool.setuptools.package-data]
+ngso_sls = ["data/*.json"]

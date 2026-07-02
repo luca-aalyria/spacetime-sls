@@ -30,6 +30,13 @@ def test_matplotlib_plots_return_figures():
     assert len(plot_availability_hist(r).axes) >= 1
 
 
+def test_world_borders_bundled():
+    from ngso_sls.viz.plots import _world_borders
+    rings = _world_borders()
+    assert len(rings) > 100                       # ~289 border rings bundled
+    assert len(rings[0][0]) == 2                  # each point is [lon, lat]
+
+
 def test_plotly_geo_map_returns_figure():
     fig = plot_availability_map(_res())
     assert isinstance(fig, go.Figure)
