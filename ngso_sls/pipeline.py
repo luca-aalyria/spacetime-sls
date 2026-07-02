@@ -1,6 +1,7 @@
 import numpy as np
 from .config import SimConfig
 from .constellation.walker import walker_elements
+from .constants import RE_EQ
 from .propagation.kepler_j2 import KeplerJ2Propagator
 from .geometry.frames import gmst_rad, eci_to_ecef, geodetic_to_ecef, enu_up, enu_east, enu_north
 from .geometry.access import elevation_deg, az_el_deg
@@ -57,11 +58,43 @@ def run_coverage_h3(
     the pre-filter only drops satellites that are never in view of the shard's cells and all
     reductions are integer counts, the sharded result is bit-identical to the monolithic one
     (the `sharded == monolithic` invariant)."""
-    propagator = propagator or KeplerJ2Propagator()
-    elems = np.vstack([walker_elements(s) for s in sim.constellation.shells])
+    from .config import constellation_model
+    model = constellation_model(sim.constellation)
     min_elev = min(s.min_elev_user_deg for s in sim.constellation.shells)
-    max_alt = max(s.altitude_km for s in sim.constellation.shells)
-    times = sim.time_grid.times_s()
+    return run_coverage_h3_elements(
+        model.elems, model.plane_uid, min_elev, sim.time_grid, aor, cell_res,
+        shard_res=shard_res, chunk_steps=chunk_steps, propagator=propagator, progress=progress,
+        k_values=(k_values if k_values is not None else [sim.k_coverage]), terrain=terrain,
+        continuity_overlap_s=continuity_overlap_s, require_different_sat=require_different_sat,
+        default_k=sim.k_coverage)
+
+
+def run_coverage_h3_elements(
+    elems: np.ndarray,
+    plane_uid: np.ndarray,
+    min_elev_user_deg: float,
+    time_grid,
+    aor: dict,
+    cell_res: int,
+    shard_res: int | None = None,
+    chunk_steps: int | None = None,
+    propagator=None,
+    progress=None,
+    k_values=None,
+    terrain=None,
+    continuity_overlap_s: float | None = None,
+    require_different_sat: bool = True,
+    default_k=None,
+) -> dict:
+    """Coverage on an H3 grid given pre-assembled element arrays.
+
+    This is the core compute kernel; `run_coverage_h3` assembles elems/plane_uid from a SimConfig
+    and delegates here. The `plane_uid` array is threaded through for future use by the
+    different-plane handover rule (Task 8+); it is not yet consumed by the shard loop."""
+    propagator = propagator or KeplerJ2Propagator()
+    min_elev = min_elev_user_deg
+    max_alt = float((elems[:, 0] * (1.0 + elems[:, 1])).max()) - RE_EQ  # apoapsis
+    times = time_grid.times_s()
     n_time = len(times)
 
     cells, lat, lon = h3_cells_for_aor(aor, cell_res)
@@ -72,7 +105,7 @@ def run_coverage_h3(
         )
 
     r_eci = propagator.propagate(elems, times)
-    gmst = gmst_rad(sim.time_grid.epoch_utc, times)
+    gmst = gmst_rad(time_grid.epoch_utc, times)
     r_ecef = eci_to_ecef(r_eci, gmst)                       # (n_sat,n_time,3)
     cell_ecef = geodetic_to_ecef(lat, lon)
     cell_up = enu_up(lat, lon)
@@ -92,20 +125,25 @@ def run_coverage_h3(
         shards = {s: np.array(idx) for s, idx in groups.items()}
         sub_lat, sub_lon = ecef_to_subpoint_latlon(r_ecef)
         dil = conservative_dilation_deg(
-            max_alt, min_elev, cell_circumradius_deg(cell_res), sim.time_grid.step_s
+            max_alt, min_elev, cell_circumradius_deg(cell_res), time_grid.step_s
         )
 
     chunk = chunk_steps or n_time
     bounds = [(i, min(i + chunk, n_time)) for i in range(0, n_time, chunk)]
 
-    ks = sorted(set(k_values)) if k_values is not None else [sim.k_coverage]
+    if k_values is not None:
+        ks = sorted(set(k_values))
+    elif default_k is not None:
+        ks = [default_k]
+    else:
+        ks = [1, 2]   # sensible default when neither k_values nor default_k is given
     serviceable = {k: np.zeros(n_cell, dtype=np.int64) for k in ks}  # #timesteps with >=k in view
     sat_sum = np.zeros(n_cell, dtype=np.int64)          # sum over time of sats-in-view per cell
 
     # Make-before-break (k=1) continuity: opt-in per-cell handover-feasibility analysis.
     do_mbb = continuity_overlap_s is not None
     if do_mbb:
-        step = sim.time_grid.step_s
+        step = time_grid.step_s
         # Conservative: `ov` shared samples guarantee (ov-1)*step of continuous 2-sat visibility,
         # so require ov >= overlap_s/step + 1 (>=1 shared sample even at overlap_s=0).
         min_overlap_steps = (int(np.ceil(continuity_overlap_s / step)) + 1
@@ -161,10 +199,10 @@ def run_coverage_h3(
             progress(done_shards, total_shards)
 
     availability_by_k = {k: serviceable[k] / n_time for k in ks}
-    default_k = sim.k_coverage if sim.k_coverage in availability_by_k else ks[0]
+    _default_k = default_k if (default_k is not None and default_k in availability_by_k) else ks[0]
     out = {
         "cells": cells, "lat": lat, "lon": lon,
-        "availability": availability_by_k[default_k],       # back-compat (single-k callers)
+        "availability": availability_by_k[_default_k],      # back-compat (single-k callers)
         "availability_by_k": availability_by_k,             # {k: per-cell availability}
         "sats_in_view_mean": sat_sum / n_time,
         "min_elev_deg": min_elev,
