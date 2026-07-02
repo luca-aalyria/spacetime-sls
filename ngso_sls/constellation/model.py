@@ -6,7 +6,7 @@ slot / shell identity used only by reporting and the handover different-plane ru
 (Walker, explicit asymmetric planes, phase-slot/lattice) all emit this one type; propagation and
 coverage never depend on which generator produced it. Pure NumPy — safe for the core."""
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import numpy as np
 from ..constants import RE_EQ
 
@@ -64,3 +64,35 @@ def _physical_plane_uid(elems: np.ndarray) -> np.ndarray:
     key = np.round(elems[:, [3, 2, 0]], _PLANE_Q)          # raan_rad, i_rad, a_km
     _, inv = np.unique(key, axis=0, return_inverse=True)
     return inv.astype(np.int64)
+
+
+@dataclass(frozen=True)
+class OrbitTemplate:
+    a_km: float
+    ecc: float = 0.0
+    inc_rad: float = 0.0
+    argp_rad: float = 0.0
+    epoch_s: float = 0.0
+
+
+def walker_model(template: OrbitTemplate, total_sats: int, planes: int, phasing: int,
+                 *, raan0_deg: float = 0.0, phase0_deg: float = 0.0,
+                 shell_name: str = "walker") -> ConstellationModel:
+    """Walker T/P/F -> ConstellationModel. Reproduces walker.py:16-27 arithmetic EXACTLY
+    (fused M expression) so `walker_elements` stays byte-identical."""
+    T, P, F = total_sats, planes, phasing
+    if T % P != 0:
+        raise ValueError(f"total_sats ({T}) must be divisible by planes ({P})")
+    S = T // P
+    p_idx = np.repeat(np.arange(P), S)
+    s_idx = np.tile(np.arange(S), P)
+    raan = np.radians(raan0_deg + p_idx * 360.0 / P) % (2 * np.pi)
+    M = np.radians(phase0_deg + s_idx * 360.0 / S + p_idx * F * 360.0 / T) % (2 * np.pi)
+    out = np.empty((T, 6))
+    out[:, 0], out[:, 1], out[:, 2] = template.a_km, template.ecc, template.inc_rad
+    out[:, 3], out[:, 4], out[:, 5] = raan, template.argp_rad, M
+    return ConstellationModel(
+        elems=out, plane_uid=_physical_plane_uid(out),
+        slot_id=s_idx.astype(np.int64), shell_id=np.zeros(T, dtype=np.int64),
+        epoch_s=np.full(T, template.epoch_s),
+        sat_id=tuple(f"{shell_name}-P{p:02d}-S{s:02d}" for p, s in zip(p_idx, s_idx)))
