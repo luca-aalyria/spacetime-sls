@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection, LineCollection
 import h3
-import plotly.graph_objects as go
 
 from ..geodata import all_border_rings
 
@@ -85,6 +84,7 @@ def plot_availability(res: dict):
 def plot_availability_map(res: dict, title: str = "Coverage availability"):
     """Interactive 2D geographic map (Plotly) of per-cell availability over the service area,
     with coastlines + country borders, auto-zoomed to the AOR."""
+    import plotly.graph_objects as go
     fig = go.Figure(
         go.Scattergeo(
             lon=res["lon"],
@@ -237,4 +237,63 @@ def plot_availability_hist(res: dict, bins: int = 20):
     ax.set_ylabel("number of cells")
     ax.set_title("Availability distribution across cells")
     ax.grid(True, alpha=0.3)
+    return fig
+
+
+def plot_multi_shape_scatter(sweep: dict, k: int = 1):
+    """Headline: %-area-at-target vs N, one point per (P,spp). Pareto/min-N marked; gate-fail
+    shapes drawn as a distinct red marker with a center cross (colorblind-safe)."""
+    c = sweep["candidates"]
+    N = [x["N"] for x in c]
+    pct = [100.0 * x["pct_by_k"][k] for x in c]
+    fig, ax = plt.subplots(figsize=(7.5, 5))
+    ax.scatter(N, pct, s=40, c="tab:blue", label=f"k={k}: % area ≥ target")
+    if sweep.get("continuity_overlap_s") is not None:
+        fail = [(x["N"], 100.0 * x["pct_by_k"][k]) for x in c if not x.get("mbb_pass", True)]
+        if fail:
+            fx, fy = zip(*fail)
+            ax.scatter(fx, fy, s=110, facecolors="none", edgecolors="red", linewidths=1.6,
+                       marker="o", zorder=5, label="fails handover gate")
+            ax.scatter(fx, fy, s=40, c="red", marker="x", zorder=6)
+        mn = sweep.get("min_N_mbb")
+        if mn is not None:
+            ax.axvline(mn, ls="-.", color="black", lw=1.4, label=f"min N (MBB)={mn}")
+    ax.axhline(100.0 * sweep["area_grade"], ls="--", color="0.4", lw=1,
+               label=f"area grade {sweep['area_grade']:.0%}")
+    ax.set_xlabel("total satellites (N)")
+    ax.set_ylabel(f"% of area ≥ {sweep['target_availability']:.0%} availability")
+    ax.set_ylim(0, 101)
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=8, loc="lower right")
+    ax.set_title(f"Coverage vs constellation size ({sweep['inclination_deg']:g}° @ "
+                 f"{sweep['altitude_km']:g} km)")
+    return fig
+
+
+def plot_multi_shape_heatmap(sweep: dict, k: int = 1):
+    """%-area-at-target over the planes × sats/plane grid (pcolormesh, honest non-uniform ticks).
+    Gate-fail cells get a center cross; Pareto/min-N cell is boxed."""
+    Pv, Sv = sweep["planes_values"], sweep["spp_values"]
+    grid = np.full((len(Sv), len(Pv)), np.nan)
+    pi = {p: i for i, p in enumerate(Pv)}
+    si = {s: i for i, s in enumerate(Sv)}
+    for c in sweep["candidates"]:
+        grid[si[c["sats_per_plane"]], pi[c["planes"]]] = 100.0 * c["pct_by_k"][k]
+    xedges = np.arange(len(Pv) + 1) - 0.5
+    yedges = np.arange(len(Sv) + 1) - 0.5
+    fig, ax = plt.subplots(figsize=(7.5, 5.5))
+    pc = ax.pcolormesh(xedges, yedges, grid, cmap="RdYlGn", vmin=0, vmax=100)
+    ax.set_xticks(range(len(Pv)), [str(p) for p in Pv])
+    ax.set_yticks(range(len(Sv)), [str(s) for s in Sv])
+    for c in sweep["candidates"]:
+        x, y = pi[c["planes"]], si[c["sats_per_plane"]]
+        if sweep.get("continuity_overlap_s") is not None and not c.get("mbb_pass", True):
+            ax.plot(x, y, marker="x", color="black", ms=8, mew=2)
+        if c.get("is_pareto"):
+            ax.add_patch(plt.Rectangle((x - 0.5, y - 0.5), 1, 1, fill=False,
+                                       edgecolor="black", lw=2.2))
+    ax.set_xlabel("planes (P)")
+    ax.set_ylabel("satellites per plane")
+    fig.colorbar(pc, ax=ax, label=f"% area ≥ {sweep['target_availability']:.0%} avail (k={k})")
+    ax.set_title(f"Coverage by shape ({sweep['inclination_deg']:g}° @ {sweep['altitude_km']:g} km)")
     return fig

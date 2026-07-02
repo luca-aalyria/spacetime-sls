@@ -61,6 +61,27 @@ def test_hexmap_returns_figure_with_polygons():
     assert any(abs((c.get_alpha() or 1.0) - 0.3) < 1e-9 for c in fig.axes[0].collections)
 
 
+def test_sweep_plots_import_without_plotly(monkeypatch):
+    import sys, importlib
+    monkeypatch.setitem(sys.modules, "plotly", None)      # simulate plotly absent
+    monkeypatch.setitem(sys.modules, "plotly.graph_objects", None)
+    import ngso_sls.viz.plots as p
+    importlib.reload(p)
+    from ngso_sls.viz.plots import plot_multi_shape_scatter, plot_multi_shape_heatmap
+    sweep = {"candidates": [
+                {"N": 16, "planes": 4, "sats_per_plane": 4, "pct_by_k": {1: 0.6},
+                 "pct_mbb": 0.4, "mbb_pass": False, "is_pareto": False},
+                {"N": 48, "planes": 6, "sats_per_plane": 8, "pct_by_k": {1: 0.95},
+                 "pct_mbb": 0.9, "mbb_pass": True, "is_pareto": True}],
+             "min_N_by_k": {1: 48}, "min_N_mbb": 48, "continuity_overlap_s": 30.0,
+             "k_values": [1], "planes_values": [4, 6], "spp_values": [4, 8],
+             "target_availability": 0.9, "area_grade": 0.8,
+             "altitude_km": 650.0, "inclination_deg": 53.0}
+    assert len(plot_multi_shape_scatter(sweep, k=1).axes) >= 1
+    assert len(plot_multi_shape_heatmap(sweep, k=1).axes) >= 1
+    importlib.reload(p)                                    # restore for other tests
+
+
 def test_mbb_hexmap_and_sweep_overlay():
     import h3
     from ngso_sls.viz.plots import plot_mbb_feasible_hexmap, plot_min_sat_sweep
