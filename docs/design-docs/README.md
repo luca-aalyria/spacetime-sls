@@ -23,6 +23,7 @@
 - [slice-a-patent-screening.md](slice-a-patent-screening.md) — **Slice A: patent-shape screening post-check** (⏸️ deferred stub — flags shapes resembling patented geometries; engineering flag, not legal FTO).
 - [slice-e-nbi-integration.md](slice-e-nbi-integration.md) — **Slice E: live Spacetime/Minkowski NBI integration** (read-only pull; adversarially verified; ⏸️ parked).
 - [slice-a-revisions.md](slice-a-revisions.md) — **Slice A revisions (current focus):** generalized (non-Walker) constellation generators + full make-before-break handover continuity + multi-shape P×spp sweep. Adversarially verified (workflow `wxiaf4yi2`); k=1 MBB increment already shipped.
+- [slice-a-revisions-implementation-plan.md](slice-a-revisions-implementation-plan.md) — **Slice A revisions implementation plan** (12 TDD tasks: model+generators → config → pipeline seam → continuity → refine → sweep → viz → explorer).
 - _Slice B (capacity/link-budget/beam-hopping), C (optimization/interference/3D viewer), D (NMTS export) — written when reached._
 
 ## Status
