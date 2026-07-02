@@ -2,6 +2,8 @@ import numpy as np
 import pytest
 from ngso_sls.constellation.model import ConstellationModel
 from ngso_sls.constellation.model import walker_model, OrbitTemplate
+from ngso_sls.constellation.model import (explicit_planes_model, phase_slot_model,
+                                          PlaneSpec, PhaseSlot)
 from ngso_sls.constellation.walker import walker_elements
 from ngso_sls.config import Shell
 from ngso_sls.constants import RE_EQ
@@ -75,3 +77,21 @@ def test_walker_model_plane_uid_is_physical_plane():
     # 6 physical planes, 8 sats each
     uids, counts = np.unique(m.plane_uid, return_counts=True)
     assert len(uids) == 6 and set(counts.tolist()) == {8}
+
+
+def test_explicit_planes_uneven_population_and_raan():
+    tmpl = OrbitTemplate(a_km=RE_EQ + 600.0, ecc=0.0, inc_rad=np.radians(50.0))
+    planes = [PlaneSpec(raan_rad=0.0, phase_rad=(0.0, 1.0, 2.0)),
+              PlaneSpec(raan_rad=0.8, phase_rad=(0.5, 1.5))]     # unequal counts
+    m = explicit_planes_model(tmpl, planes)
+    assert m.n_sat == 5
+    assert len(np.unique(m.plane_uid)) == 2                     # two distinct RAAN planes
+    assert np.isclose(m.elems[3, 3], 0.8)                       # 4th sat is in plane 2 (raan 0.8)
+
+
+def test_phase_slot_coplanar_slots_share_plane_uid():
+    tmpl = OrbitTemplate(a_km=RE_EQ + 700.0, ecc=0.0, inc_rad=np.radians(45.0))
+    slots = [PhaseSlot(raan_rad=1.0, mean_anomaly_rad=0.0, slot_id=0),
+             PhaseSlot(raan_rad=1.0, mean_anomaly_rad=3.0, slot_id=1)]   # SAME raan
+    m = phase_slot_model(tmpl, slots)
+    assert m.plane_uid[0] == m.plane_uid[1]                     # co-planar -> shared uid

@@ -7,6 +7,7 @@ slot / shell identity used only by reporting and the handover different-plane ru
 coverage never depend on which generator produced it. Pure NumPy — safe for the core."""
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import Sequence
 import numpy as np
 from ..constants import RE_EQ
 
@@ -96,3 +97,62 @@ def walker_model(template: OrbitTemplate, total_sats: int, planes: int, phasing:
         slot_id=s_idx.astype(np.int64), shell_id=np.zeros(T, dtype=np.int64),
         epoch_s=np.full(T, template.epoch_s),
         sat_id=tuple(f"{shell_name}-P{p:02d}-S{s:02d}" for p, s in zip(p_idx, s_idx)))
+
+
+@dataclass(frozen=True)
+class PlaneSpec:
+    raan_rad: float
+    phase_rad: Sequence[float]
+    a_km: float | None = None
+    ecc: float | None = None
+    inc_rad: float | None = None
+    argp_rad: float | None = None
+
+
+@dataclass(frozen=True)
+class PhaseSlot:
+    raan_rad: float
+    mean_anomaly_rad: float
+    slot_id: int = 0
+    a_km: float | None = None
+    ecc: float | None = None
+    inc_rad: float | None = None
+    argp_rad: float | None = None
+
+
+def _rows_to_model(rows, slot_ids, shell_name):
+    out = np.asarray(rows, dtype=float).reshape(-1, 6)
+    n = out.shape[0]
+    return ConstellationModel(
+        elems=out, plane_uid=_physical_plane_uid(out),
+        slot_id=np.asarray(slot_ids, dtype=np.int64), shell_id=np.zeros(n, dtype=np.int64),
+        epoch_s=np.zeros(n), sat_id=tuple(f"{shell_name}-{i:03d}" for i in range(n)))
+
+
+def explicit_planes_model(template: OrbitTemplate, planes: Sequence[PlaneSpec],
+                          *, shell_name: str = "asym") -> ConstellationModel:
+    """Arbitrary plane spacing / population / per-plane element overrides."""
+    rows, slots = [], []
+    for plane in planes:
+        a = template.a_km if plane.a_km is None else plane.a_km
+        e = template.ecc if plane.ecc is None else plane.ecc
+        inc = template.inc_rad if plane.inc_rad is None else plane.inc_rad
+        argp = template.argp_rad if plane.argp_rad is None else plane.argp_rad
+        for s, phase in enumerate(plane.phase_rad):
+            rows.append([a, e, inc, plane.raan_rad % (2 * np.pi), argp, phase % (2 * np.pi)])
+            slots.append(s)
+    return _rows_to_model(rows, slots, shell_name)
+
+
+def phase_slot_model(template: OrbitTemplate, slots: Sequence[PhaseSlot],
+                     *, shell_name: str = "lattice") -> ConstellationModel:
+    """Flower/lattice constellation from explicit (RAAN, M0) slot pairs (external-solver seam)."""
+    rows, slot_ids = [], []
+    for sl in slots:
+        a = template.a_km if sl.a_km is None else sl.a_km
+        e = template.ecc if sl.ecc is None else sl.ecc
+        inc = template.inc_rad if sl.inc_rad is None else sl.inc_rad
+        argp = template.argp_rad if sl.argp_rad is None else sl.argp_rad
+        rows.append([a, e, inc, sl.raan_rad % (2 * np.pi), argp, sl.mean_anomaly_rad % (2 * np.pi)])
+        slot_ids.append(sl.slot_id)
+    return _rows_to_model(rows, slot_ids, shell_name)
