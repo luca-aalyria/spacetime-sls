@@ -86,6 +86,11 @@ ceiling; shards embarrassingly parallel — multi-worker still to be wired). 29 
 | SA10 | Multi-k min-N analysis: sweep constellation size for k=1 (single) and k=2 (handover) coverage over an AOR; per-k min-N | A | ☑ |
 | SA11 | **Coarse terrain masking** (mountains): **Tier-2 engine done** — azimuth (`az_el_deg`) + per-cell azimuth-binned horizon from a DEM (`terrain.horizon_mask_from_dem`, curvature-corrected) + visibility test `elev ≥ max(min_elev, mask[cell,az])` + Coverage-Explorer toggle. Real DEM via runtime fetch (`fetch_dem_erddap` — NOAA ERDDAP ETOPO, no key, bbox subset) or loaders (`dem_from_geotiff`, `dem_from_xyz_csv`); synthetic ridge for offline demo/tests; Explorer terrain-source selector (Demo ridge / ETOPO fetch). Format = lat_1d asc, lon_1d asc (-180..180), elev_2d[m]. **Note:** ERDDAP endpoint verifiable only in Colab (sandbox egress limited); distant terrain has small effect on a dense LEO constellation — matters most for local relief / high min-elev / sparse constellations | A | ◐ |
 
+| SA12 | **Generalized constellation model** (in design): explicit satellite/element model + generators (Walker + asymmetric multi-plane + phase-slot/lattice + multi-shell); propagation/coverage generator-independent. Design: `slice-a-revisions` | A | ◐ |
+| SA13 | **Make-before-break handover continuity** (in design): continuous k=1 + mandatory k≥2 overlap ≥ τ_overlap at every serving transition; usable-interval + handover-graph evaluator (hybrid: tensor maps + bisection-refined interval endpoints); metrics per ref §8. Promotes FUT4 | A | ◐ |
+| SA14 | **Multi-shape min-sat sweep** (in design): 2D planes × sats/plane grid (+ inclination range); 1D coverage-vs-N scatter (Pareto) + 2D P×spp heatmap; k=1 handover-gate toggle with red-flagged failures | A | ◐ |
+| SA15 | **Patent-shape screening post-check** (⏸️ deferred, lower priority): flag simulated shapes that may fall within a patented constellation geometry per `references/constellation-shapes-patent-analyis/` (19 families, 11 RED). Tiers: GEOMETRIC (auto) vs PRECONDITION/REVIEW (operational). Catalog-driven (`ngso_sls/data/patent_shapes.json`), configurable, **engineering flag not legal FTO**; must NOT flag ordinary Walker. Consumes the SA12 model. Stub: `slice-a-patent-screening.md` | A | ☐ |
+
 ## Process (emergent)
 | ID | Requirement | Status |
 |----|-------------|--------|

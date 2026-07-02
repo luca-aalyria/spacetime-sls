@@ -94,6 +94,16 @@ availability histogram. Engine returns `sats_in_view_mean`; AOR presets India/CO
 
 ## Next Steps
 
+00. **Slice A REVISIONS — current focus (2026-07-02).** Owner returned to Slice A for substantial
+    revisions (Slice E parked). Scope: (SA12) generalized non-Walker constellation generators
+    (Walker + asymmetric multi-plane + phase-slot/lattice + multi-shell) on an explicit element
+    model; (SA13) make-before-break handover continuity (continuous k=1 + τ_overlap k≥2 windows at
+    every transition; hybrid tensor + bisection-refined interval/handover-graph evaluator);
+    (SA14) multi-shape P×spp sweep with 1D scatter + 2D heatmap and a k=1 handover-gate toggle
+    (red-flagged failures). Design being adversarially verified (workflow `wc6hit6je`). **Then**
+    (SA15, deferred/lower-priority) patent-shape screening post-check — stub written
+    (`slice-a-patent-screening.md`); consumes the SA12 model; engineering flag, not legal FTO.
+
 0. **Slice E — Spacetime NBI integration: DESIGN DONE, adversarially verified (2026-07-02).**
    Design doc: `slice-e-nbi-integration.md`. 7-agent workflow `wi2lk7ugy` mapped the pull
    surface from minkowski source + Rivada notebooks and ran 3 skeptic lenses (all needs-fixes;

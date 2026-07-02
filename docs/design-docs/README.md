@@ -20,7 +20,9 @@
 
 - [slice-a-coverage-core.md](slice-a-coverage-core.md) — **Slice A: SLS engine core (offline)**.
 - [slice-a-implementation-plan.md](slice-a-implementation-plan.md) — **Slice A implementation plan** (MVP-first, TDD; M1 done, M2–M8 roadmap).
-- [slice-e-nbi-integration.md](slice-e-nbi-integration.md) — **Slice E: live Spacetime/Minkowski NBI integration** (read-only pull; adversarially verified) — **current focus.**
+- [slice-a-patent-screening.md](slice-a-patent-screening.md) — **Slice A: patent-shape screening post-check** (⏸️ deferred stub — flags shapes resembling patented geometries; engineering flag, not legal FTO).
+- [slice-e-nbi-integration.md](slice-e-nbi-integration.md) — **Slice E: live Spacetime/Minkowski NBI integration** (read-only pull; adversarially verified; ⏸️ parked).
+- **Slice A revisions (current focus):** generalized constellation generators + make-before-break handover continuity + multi-shape sweep — design in progress (adversarial workflow).
 - _Slice B (capacity/link-budget/beam-hopping), C (optimization/interference/3D viewer), D (NMTS export) — written when reached._
 
 ## Status
