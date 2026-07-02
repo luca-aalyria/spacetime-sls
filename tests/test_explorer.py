@@ -30,6 +30,25 @@ def test_explorer_builds_and_runs(tmp_path):
     assert ex.run_btn.disabled is False and ex.run_btn.description == "Run simulation"
 
 
+def test_explorer_close_run_and_per_run_csv(tmp_path):
+    ex = CoverageExplorer(csv_path=str(tmp_path / "cov.csv"))
+    ex.scenario.value = "~200 @48° (minimal)"
+    ex.cell_res.value = 2
+    ex.duration_min.value = 20.0
+    ex.run()
+    ex.run()
+    assert len(ex.runs_tab.children) == 2
+    # each run persisted its own CSV (survives a tab close)
+    assert (tmp_path / "cov_run1.csv").exists() and (tmp_path / "cov_run2.csv").exists()
+    # closing the first run's tab removes it; the other stays
+    first_panel = ex.runs_tab.children[0]
+    ex._close_run(first_panel)
+    assert len(ex.runs_tab.children) == 1
+    assert (tmp_path / "cov_run1.csv").exists()          # data remains on disk after closing
+    # titles reindexed, no crash selecting
+    assert ex.runs_tab.selected_index == 0
+
+
 def test_explorer_handover_gate_and_params(tmp_path):
     ex = CoverageExplorer(csv_path=str(tmp_path / "h.csv"))
     ex.scenario.value = "~200 @48° (minimal)"

@@ -14,6 +14,7 @@ dependency-light and is untouched.
 """
 from dataclasses import replace
 from datetime import datetime, timezone
+import os
 import traceback
 
 import matplotlib.pyplot as plt
@@ -42,6 +43,13 @@ def _lbl(text):
 
 def _titled(title, box):
     return w.VBox([_lbl(title), box])
+
+
+def _run_csv_path(base: str, n: int) -> str:
+    """Per-run CSV filename: 'coverage_availability.csv' -> 'coverage_availability_run3.csv'.
+    Each run persists its own file so a closed tab never loses its data."""
+    stem, ext = os.path.splitext(base)
+    return f"{stem}_run{n}{ext}"
 
 
 class CoverageExplorer:
@@ -225,6 +233,7 @@ class CoverageExplorer:
                 self.last_result = res
                 a = res["availability"]
                 params = res["_params"]
+                n = self._run_count + 1
                 print(f"Constellation: {self.scenario.value}  |  {res['_total_sats']} sats  |  {res['_shape']}")
                 print("Parameters: " + ", ".join(f"{k}={v}" for k, v in params.items()))
                 print(f"  cells={len(res['cells'])}  availability mean={a.mean():.3f} min={a.min():.3f} "
@@ -233,11 +242,13 @@ class CoverageExplorer:
                 if "mbb_feasible" in res:
                     print(f"  make-before-break (≥{res['continuity_overlap_s']:g}s overlap): "
                           f"{res['mbb_feasible'].mean():.1%} of cells feasible (k=1)")
-                write_availability_csv(res, self.csv_path,
-                                       {**params, "total_sats": res["_total_sats"], "shape": res["_shape"]})
-                print(f"  wrote {self.csv_path}")
+                manifest = {**params, "total_sats": res["_total_sats"], "shape": res["_shape"]}
+                run_csv = _run_csv_path(self.csv_path, n)
+                write_availability_csv(res, self.csv_path, manifest)   # latest (stable name)
+                write_availability_csv(res, run_csv, manifest)         # per-run (survives tab close)
+                print(f"  wrote {self.csv_path} and {run_csv}")
             self.status.value = "🖼️ rendering plots…"
-            self._append_run_panel(res)
+            self._append_run_panel(res, n)
             self.status.value = (f"✅ done — run {self._run_count}: {len(res['cells'])} cells, "
                                  f"availability mean {a.mean():.3f}, mean sats-in-view "
                                  f"{res['sats_in_view_mean'].mean():.1f}")
@@ -251,11 +262,10 @@ class CoverageExplorer:
             self.run_btn.disabled = False
             self.run_btn.description = "Run simulation"
 
-    def _append_run_panel(self, res):
+    def _append_run_panel(self, res, n):
         """Render this run's plots into a fresh tab appended to the runs history (previous runs
-        stay visible), with a header echoing the input parameters."""
-        self._run_count += 1
-        n = self._run_count
+        stay visible), with a header echoing the input parameters and a ✕ Close button."""
+        self._run_count = n
         alpha, ak, aor = self.hex_alpha.value, self.k_cov.value, self.aor.value
         box = w.Layout(border="1px solid #ccc", padding="6px", margin="2px", min_height="60px")
         o_av, o_siv, o_mbb, o_lat, o_hist = (w.Output(layout=box) for _ in range(5))
@@ -278,12 +288,32 @@ class CoverageExplorer:
         params = res["_params"]
         hdr = w.HTML(f"<b>Run {n}</b> — {res['_total_sats']} sats · {res['_shape']}<br>"
                      f"<span style='font-size:90%;color:#555'>"
-                     + " · ".join(f"{k}={v}" for k, v in params.items()) + "</span>")
-        panel = w.VBox([hdr, inner])
+                     + " · ".join(f"{k}={v}" for k, v in params.items())
+                     + " · (CSV kept on disk)</span>")
+        close_btn = w.Button(description="✕ Close run", button_style="danger",
+                             tooltip="Remove this run's tab (its CSV stays on disk)",
+                             layout=w.Layout(width="120px"))
+        panel = w.VBox([w.HBox([close_btn, hdr]), inner])
+        close_btn.on_click(lambda _b, p=panel: self._close_run(p))
         self.runs_tab.children = self.runs_tab.children + (panel,)
         idx = len(self.runs_tab.children) - 1
         self.runs_tab.set_title(idx, f"Run {n}: k{ak}{' MBB' if 'mbb_feasible' in res else ''}")
         self.runs_tab.selected_index = idx
+
+    def _close_run(self, panel):
+        """Remove a run's tab (data stays in its per-run CSV). Reindexes the remaining tab titles."""
+        kids = list(self.runs_tab.children)
+        if panel not in kids:
+            return
+        titles = [self.runs_tab.get_title(i) for i in range(len(kids))]
+        i = kids.index(panel)
+        kids.pop(i)
+        titles.pop(i)
+        self.runs_tab.children = tuple(kids)
+        for j, t in enumerate(titles):
+            self.runs_tab.set_title(j, t or "")
+        if kids:
+            self.runs_tab.selected_index = min(i, len(kids) - 1)
 
     def display(self):
         """Show controls + results together and run once (single-cell convenience)."""
@@ -430,10 +460,13 @@ class MinSatSweep:
                         if cand:
                             bi = min(cand, key=lambda x: x[1])
                             print(f"  best MBB (≥{res['continuity_overlap_s']:g}s): {bi[1]} sats at {bi[0]:g}°")
-                _write_sweep_csv(res, mode, self.csv_path, manifest=self._params())
-                print(f"wrote {self.csv_path}")
+                n = self._run_count + 1
+                _write_sweep_csv(res, mode, self.csv_path, manifest=self._params())   # latest
+                run_csv = _run_csv_path(self.csv_path, n)
+                _write_sweep_csv(res, mode, run_csv, manifest=self._params())          # per-run
+                print(f"wrote {self.csv_path} and {run_csv}")
             self.status.value = "🖼️ rendering…"
-            self._append_sweep_panel(mode, res)
+            self._append_sweep_panel(mode, res, n)
             self.status.value = "✅ done"
             self.progress.bar_style = "success"
         except Exception:
@@ -462,11 +495,10 @@ class MinSatSweep:
             "propagator": "KeplerJ2",
         }
 
-    def _append_sweep_panel(self, mode, res):
+    def _append_sweep_panel(self, mode, res, n):
         """Render this sweep's plot(s) into a fresh panel appended below previous runs, with a
-        header echoing the input parameters (previous runs are kept)."""
-        self._run_count += 1
-        n = self._run_count
+        header echoing the input parameters and a ✕ Close button (previous runs are kept)."""
+        self._run_count = n
         box = w.Layout(border="1px solid #ccc", padding="6px", margin="2px", min_height="60px")
         out = w.Output(layout=box)
         with out:
@@ -488,8 +520,18 @@ class MinSatSweep:
             except Exception:
                 traceback.print_exc()
         hdr = w.HTML(f"<b>Run {n}</b> ({mode}) — <span style='font-size:90%;color:#555'>"
-                     + " · ".join(f"{k}={v}" for k, v in self._params().items()) + "</span>")
-        self.runs_box.children = self.runs_box.children + (w.VBox([hdr, out]),)
+                     + " · ".join(f"{k}={v}" for k, v in self._params().items())
+                     + " · (CSV kept on disk)</span>")
+        close_btn = w.Button(description="✕ Close", button_style="danger",
+                             tooltip="Remove this run's panel (its CSV stays on disk)",
+                             layout=w.Layout(width="90px"))
+        panel = w.VBox([w.HBox([close_btn, hdr]), out])
+        close_btn.on_click(lambda _b, p=panel: self._close_run(p))
+        self.runs_box.children = self.runs_box.children + (panel,)
+
+    def _close_run(self, panel):
+        """Remove a sweep run's panel (its per-run CSV stays on disk)."""
+        self.runs_box.children = tuple(p for p in self.runs_box.children if p is not panel)
 
 
 def _write_sweep_csv(res: dict, mode: str, path: str, manifest: dict | None = None):
