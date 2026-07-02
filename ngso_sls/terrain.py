@@ -59,19 +59,45 @@ def dem_from_geotiff(path):
     return lat, lon[order], elev[:, order]
 
 
-def fetch_dem_erddap(bbox, dataset="etopo180", variable="altitude",
-                     server="https://coastwatch.pfeg.noaa.gov/erddap", pad_deg=1.0, timeout=60):
+_ERDDAP_SERVERS = ["https://coastwatch.pfeg.noaa.gov/erddap",
+                   "https://upwell.pfeg.noaa.gov/erddap"]
+
+
+def fetch_dem_erddap(bbox, servers=None, dataset="etopo180", variable="altitude",
+                     pad_deg=1.0, timeout=60):
     """Fetch a DEM for `bbox` from a NOAA ERDDAP griddap dataset (no API key). Returns
     (lat_1d, lon_1d, elev_2d) in metres. `etopo180` is ~1 arc-min global relief on -180..180.
-    Raises on network/parse errors (callers may fall back to a synthetic DEM)."""
+    Tries mirror servers and both latitude orderings; raises if all fail (callers may fall back
+    to a synthetic DEM)."""
     import urllib.request
-    la0, la1 = bbox["lat_min"] - pad_deg, bbox["lat_max"] + pad_deg
+    servers = servers or _ERDDAP_SERVERS
     lo0, lo1 = bbox["lon_min"] - pad_deg, bbox["lon_max"] + pad_deg
-    q = f"{variable}%5B({la0}):({la1})%5D%5B({lo0}):({lo1})%5D"
-    url = f"{server}/griddap/{dataset}.csv?{q}"
-    with urllib.request.urlopen(url, timeout=timeout) as r:
-        text = r.read().decode("utf-8", "replace")
-    return dem_from_xyz_csv(text)
+    la0, la1 = bbox["lat_min"] - pad_deg, bbox["lat_max"] + pad_deg
+    last = None
+    for server in servers:
+        for a, b in ((la0, la1), (la1, la0)):        # dataset may store lat asc or desc
+            url = (f"{server}/griddap/{dataset}.csv?"
+                   f"{variable}%5B({a}):({b})%5D%5B({lo0}):({lo1})%5D")
+            try:
+                with urllib.request.urlopen(url, timeout=timeout) as r:
+                    text = r.read().decode("utf-8", "replace")
+                lat, lon, elev = dem_from_xyz_csv(text)
+                if lat.size and lon.size:
+                    return lat, lon, elev
+            except Exception as e:  # network / HTTP / parse — try the next combination
+                last = e
+    raise RuntimeError(f"ETOPO fetch failed from {servers}: {last}")
+
+
+def fetch_dem_selftest(bbox=None):
+    """Quick verification of the ETOPO runtime fetch (run in Colab). Fetches a small tile and
+    returns a summary dict; the default bbox (Everest region) should show a high max elevation."""
+    b = bbox or {"lat_min": 27.0, "lat_max": 29.0, "lon_min": 85.0, "lon_max": 87.0}
+    lat, lon, elev = fetch_dem_erddap(b)
+    return {"shape": tuple(elev.shape),
+            "lat_range": (float(lat.min()), float(lat.max())),
+            "lon_range": (float(lon.min()), float(lon.max())),
+            "elev_min_m": float(np.nanmin(elev)), "elev_max_m": float(np.nanmax(elev))}
 
 
 def synthetic_ridge_dem(bbox, ridge_lat, height_m=5000.0, width_deg=1.5, res_deg=0.25):

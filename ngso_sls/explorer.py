@@ -80,8 +80,8 @@ class CoverageExplorer:
                                  style=wide, layout=w.Layout(width="360px"))
         self.use_shard = w.Checkbox(value=True, description="Use sharding (faster, identical result)")
         self.terrain_on = w.Checkbox(value=False, description="Account for terrain (raises horizon)")
-        self.terrain_source = w.Dropdown(options=["Demo ridge (offline)", "ETOPO fetch (Colab)"],
-                                         value="Demo ridge (offline)", description="Terrain source",
+        self.terrain_source = w.Dropdown(options=["ETOPO fetch (Colab)", "Demo ridge (offline)"],
+                                         value="ETOPO fetch (Colab)", description="Terrain source",
                                          style=s, layout=L)
         self.hex_alpha = w.FloatSlider(value=0.80, min=0.1, max=1.0, step=0.05,
                                        description="Cell opacity", style=s, layout=L)
