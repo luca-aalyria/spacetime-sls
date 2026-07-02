@@ -84,7 +84,7 @@ ceiling; shards embarrassingly parallel — multi-worker still to be wired). 29 
 | SA8 | Cell/beam layout resolved: geometry is **layout-independent** (TS 38.300 §16.14.1). `cell_layout∈{EFC,QEFC,EMC,UNSPEC}` = inert metadata; `beam_layout`→Slice B; no WarpField CellMode semantics (H4); CI layout-independence guard | A | ☑ |
 | SA9 | Point-evaluation assumption: coverage/elevation/intervals evaluated at a representative point per cell/UT; area-integrated cell coverage is future | A | ☑ |
 | SA10 | Multi-k min-N analysis: sweep constellation size for k=1 (single) and k=2 (handover) coverage over an AOR; per-k min-N | A | ☑ |
-| SA11 | **Coarse terrain masking** (mountains): per-cell effective min-elevation raised by a terrain horizon mask. Tier 1 = scalar per-cell mask from a coarse DEM (or user-supplied); Tier 2 = azimuth-dependent skyline horizon. Applied in the visibility test (elev ≥ min_elev + mask) | A | ☐ roadmap |
+| SA11 | **Coarse terrain masking** (mountains): **Tier-2 engine done** — azimuth (`az_el_deg`) + per-cell azimuth-binned horizon from a DEM (`terrain.horizon_mask_from_dem`, curvature-corrected) + visibility test `elev ≥ max(min_elev, mask[cell,az])` + Coverage-Explorer toggle. Works with user-supplied DEMs; synthetic ridge for demo/tests. **Pending:** bundling a real coarse global DEM (data step). Note: distant terrain has small effect on a dense LEO constellation; matters most for local relief / high min-elev / sparse constellations | A | ◐ |
 
 ## Process (emergent)
 | ID | Requirement | Status |

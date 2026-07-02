@@ -44,3 +44,19 @@ def enu_up(lat_deg, lon_deg) -> np.ndarray:
     return np.stack(
         [np.cos(lat) * np.cos(lon), np.cos(lat) * np.sin(lon), np.sin(lat)], axis=-1
     )
+
+
+def enu_east(lat_deg, lon_deg) -> np.ndarray:
+    """Local east unit vector in ECEF. Returns (...,3)."""
+    lon = np.radians(np.asarray(lon_deg, float))
+    z = np.zeros_like(lon)
+    return np.stack([-np.sin(lon), np.cos(lon), z], axis=-1)
+
+
+def enu_north(lat_deg, lon_deg) -> np.ndarray:
+    """Local north unit vector in ECEF. Returns (...,3)."""
+    lat = np.radians(np.asarray(lat_deg, float))
+    lon = np.radians(np.asarray(lon_deg, float))
+    return np.stack(
+        [-np.sin(lat) * np.cos(lon), -np.sin(lat) * np.sin(lon), np.cos(lat)], axis=-1
+    )

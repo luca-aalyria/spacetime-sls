@@ -815,14 +815,13 @@ Each milestone is additive, keeps all M1 tests green, and follows the same TDD c
 - **M7 — Min-N sweep. ✓ DONE (2026-07-01, %-of-area metric).** `sweep.min_sat_sweep` (thin a Walker shell by sats/plane → total N; per-cell availability → % of AOR cells ≥ target at k), `plot_min_sat_sweep` (coverage-vs-N + min-N marker), `MinSatSweep` UI + notebook section, CSV. Jio primary/India example: min N ≈ 800 for 95% of area @ 99% avail, k=1. **Deferred:** population-weighted %-users (needs public raster loader — D1). (Design §4.)
 - **M8 — `cell_layout` inert metadata + layout-independence CI guard + outputs vs lat & global heatmap.** Stamp `cell_layout` into manifest/headers; CI guard (data bit-identical across layout values); finish outputs 1 (sats-in-view vs lat) & 2 (global heatmap). (Design §4, SA8.)
 
-- **M9 — Coarse terrain masking** (mountains). Raise the per-cell effective min-elevation by a
-  terrain horizon mask so relief reduces low-elevation visibility. **Tier 1 (simple):** scalar
-  per-cell `terrain_mask_deg` — from a coarse DEM (`mask ≈ atan((max-neighbourhood-relief)/dist)`)
-  or user-supplied CSV — applied as `elev ≥ min_elev + terrain_mask[cell]` in the visibility test
-  (small change to the geometry/coverage contract: min-elev becomes a per-cell vector). **Tier 2
-  (better):** azimuth-dependent skyline horizon per cell (compare satellite (elev, az) vs
-  mask(az); needs the already-computed azimuth + a DEM skyline). Data: bundle/fetch a coarse DEM
-  (e.g. ETOPO downsampled) or accept per-cell masks. (Design §4; SA11.)
+- **M9 — Coarse terrain masking** (mountains). **Tier-2 engine ✓ DONE (2026-07-01).** `geometry.access.az_el_deg`
+  (elevation+azimuth), `terrain.horizon_mask_from_dem` (per-cell azimuth-binned skyline from a DEM,
+  Earth-curvature corrected), `run_coverage_h3(terrain=...)` visibility test `elev ≥ max(min_elev,
+  mask[cell,az_bin])`, Coverage-Explorer toggle, `synthetic_ridge_dem` for demo/tests. Works with
+  user-supplied DEMs. **Remaining (data):** bundle a real coarse global DEM (WebSearch/large-file
+  fetch unavailable in-sandbox). Physics note: distant coarse terrain barely affects a dense LEO
+  constellation; significant for local relief / high min-elev / sparse constellations. (SA11.)
 
 **Multi-worker scaling (N7)** enters the testing strategy from M3 onward (shards are embarrassingly parallel; validate 1→n equivalence).
 

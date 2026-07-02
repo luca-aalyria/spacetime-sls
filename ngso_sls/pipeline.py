@@ -2,8 +2,8 @@ import numpy as np
 from .config import SimConfig
 from .constellation.walker import walker_elements
 from .propagation.kepler_j2 import KeplerJ2Propagator
-from .geometry.frames import gmst_rad, eci_to_ecef, geodetic_to_ecef, enu_up
-from .geometry.access import elevation_deg
+from .geometry.frames import gmst_rad, eci_to_ecef, geodetic_to_ecef, enu_up, enu_east, enu_north
+from .geometry.access import elevation_deg, az_el_deg
 from .grids.aor import latlon_grid, aor_bbox
 from .grids.h3_grid import h3_cells_for_aor, cell_circumradius_deg
 from .grids.shards import assign_shards
@@ -44,6 +44,7 @@ def run_coverage_h3(
     propagator=None,
     progress=None,
     k_values=None,
+    terrain=None,
 ) -> dict:
     """Coverage on an H3 grid. [Milestone 3]
 
@@ -72,6 +73,12 @@ def run_coverage_h3(
     r_ecef = eci_to_ecef(r_eci, gmst)                       # (n_sat,n_time,3)
     cell_ecef = geodetic_to_ecef(lat, lon)
     cell_up = enu_up(lat, lon)
+
+    if terrain is not None:                              # per-cell azimuth-binned horizon (deg)
+        cell_east, cell_north = enu_east(lat, lon), enu_north(lat, lon)
+        terrain_masks = np.asarray(terrain(lat, lon), dtype=float)
+        n_bins = terrain_masks.shape[1]
+        bin_w = 360.0 / n_bins
 
     if shard_res is None:
         shards = {None: np.arange(n_cell)}
@@ -104,10 +111,20 @@ def run_coverage_h3(
             mask = relevant_sat_mask(sub_lat, sub_lon, clat, clon, dil)
             sat_idx = np.nonzero(mask)[0]
         if sat_idx.size:
+            if terrain is not None:
+                east_s, north_s, tmask_s = cell_east[cidx], cell_north[cidx], terrain_masks[cidx]
+                rows = np.arange(tmask_s.shape[0])[:, None, None]
             for a, b in bounds:
                 re_chunk = r_ecef[sat_idx][:, a:b, :]        # (n_sat_s, n_chunk, 3)
-                elev = elevation_deg(ce, cu, re_chunk)       # (n_cellS, n_chunk, n_sat_s)
-                nv = (elev >= min_elev).sum(axis=-1)         # (n_cellS, n_chunk)
+                if terrain is None:
+                    elev = elevation_deg(ce, cu, re_chunk)   # (n_cellS, n_chunk, n_sat_s)
+                    in_view = elev >= min_elev
+                else:
+                    elev, az = az_el_deg(ce, east_s, north_s, cu, re_chunk)
+                    azb = np.clip((az / bin_w).astype(int), 0, n_bins - 1)
+                    eff_min = np.maximum(min_elev, tmask_s[rows, azb])   # terrain skyline
+                    in_view = elev >= eff_min
+                nv = in_view.sum(axis=-1)                    # (n_cellS, n_chunk)
                 for k in ks:
                     serviceable[k][cidx] += (nv >= k).sum(axis=1)
                 sat_sum[cidx] += nv.sum(axis=1)
