@@ -1,6 +1,6 @@
 # NGSO SLS Toolkit — Progress & Next Steps
 
-## Last Updated: 2026-07-02 (Slice E design done + adversarially verified)
+## Last Updated: 2026-07-02 (SA12–SA14 implemented; 92 tests)
 
 ---
 
@@ -76,44 +76,26 @@ sweep (M4), terminals/UT (M5), in-view intervals (M6), population+min-N sweep (M
 
 ## Current Focus
 
-Slice A: **M1 (MVP) + M3 (sharding) + M7 (min-N sweep) done + interactive Colab notebook**
-(42 tests). Engine scales via single-owner H3 shards + conservative pre-filter + time-chunking.
-Notebook = Coverage Explorer (country-shape H3 fill over borders, tabs, run progress, opacity)
-+ Minimum-satellite sweep (coverage-vs-N, min-N marker). Jio/India example: min N ≈ 800 for
-95% of area @ 99% availability, k=1 (single 48° shell). Colab-verified: notebook loads
-from remote **`github.com/luca-aalyria/spacetime-sls`** (aalyria org blocks the Colab OAuth app;
-use a personal repo + `GITHUB_TOKEN` secret for private). Notebook uses **non-editable** install
-(pip `-e` doesn't import in a running Colab kernel).
-
-**Notebook UX** (2026-07-01): rebuilt `01_slice_a_mvp.ipynb` as an interactive **Coverage Explorer** —
-ipywidgets control panel (constellation/AOR/altitude/incl/min-elev/H3-res/duration/step/k/sharding +
-Run button, auto-runs defaults), **Plotly** interactive geographic coverage map, sats-in-view-vs-latitude,
-availability histogram. Engine returns `sats_in_view_mean`; AOR presets India/CONUS/Europe/Global; deps
-`plotly`+`ipywidgets` added. Colab loading solved (non-editable install from abspath; personal repo +
-`GITHUB_TOKEN` since aalyria org blocks the Colab OAuth app). 31 tests.
+Slice A: **SA12–SA14 COMPLETE (92 tests, 2026-07-02).** Generalized constellation model,
+full MBB handover-continuity, multi-shape sweep + viz, explorer planes-range. Slice A MVP
+(M1+M3+M7) + interactive Colab notebook remain validated. Next: resume Slice E NBI integration
+or move to Slice B (capacity/link budget).
 
 ## Next Steps
 
-00. **Slice A REVISIONS — current focus (2026-07-02).** Owner returned to Slice A for substantial
-    revisions (Slice E parked). Scope: (SA12) generalized non-Walker constellation generators
-    (Walker + asymmetric multi-plane + phase-slot/lattice + multi-shell) on an explicit element
-    model; (SA13) make-before-break handover continuity (continuous k=1 + τ_overlap k≥2 windows at
-    every transition; hybrid tensor + bisection-refined interval/handover-graph evaluator);
-    (SA14) multi-shape P×spp sweep with 1D scatter + 2D heatmap and a k=1 handover-gate toggle
-    (red-flagged failures). **Design DONE + adversarially verified** (workflow `wxiaf4yi2`, 9 agents,
-    4 lenses; all blockers folded — fidelity/scale honesty, physical-plane `plane_uid`, apoapsis
-    max_alt, in-core continuity confirmed): `slice-a-revisions.md`. **Awaiting owner approval →
-    writing-plans.** **Then**
-    (SA15, deferred/lower-priority) patent-shape screening post-check — stub written
-    (`slice-a-patent-screening.md`); consumes the SA12 model; engineering flag, not legal FTO.
-    **Shipped incrementally ahead of the full design (2026-07-02, 66 tests):** k=1 make-before-break
-    overlap (SA13) on the existing engine — `coverage/continuity.py` (interval extraction +
-    bottleneck serving-path test), `run_coverage_h3(continuity_overlap_s=…)` returning per-cell
-    `mbb_feasible`/`worst_overlap_s`/`n_handovers` (grid-quantized ±step_s; sharded==monolithic
-    preserved), sweep k=1 handover gate (`min_N_mbb`, red-flagged failures), MBB hexmap, and
-    Explorer/Sweep controls. Plus two UX changes: **all input params saved into the output CSV
-    manifest + echoed**, and **run history kept** (each run appends a new tab/panel, previous runs
-    retained). Deferred to the full design: sub-step bisection refinement + different-plane rule.
+00. **Slice A REVISIONS — IMPLEMENTED (2026-07-02, 92 tests).** SA12–SA14 complete.
+    Modules: `constellation/model.py`, `coverage/refine.py`, `sweep.multi_shape_sweep`,
+    `viz.plots` scatter/heatmap, `explorer` planes-range + multi_shape branch.
+    - **SA12**: `ConstellationModel` SoA + generators (Walker byte-identical shim, explicit-planes,
+      phase-slot/lattice, multi-shell concat); `config.GeneralizedShell` + `constellation_model()`;
+      `run_coverage_h3_elements` seam + apoapsis `max_alt`.
+    - **SA13**: full `ContinuityRequirement` (different-plane rule, merged-interval worst-gap);
+      `coverage/refine.py` bisection endpoint-refinement; Nyquist precondition; resolution metadata.
+      **Deferred**: full §6 event bracketing across all crossings, rigorous k≥2 continuum verdict,
+      worst link margin → Slice B.
+    - **SA14**: `multi_shape_sweep` 2D P×spp grid (cap, gate, Pareto/min-N); scatter + heatmap viz
+      (lazy plotly); Explorer planes-range + multi_shape + CSV.
+    (SA15 patent-shape screening: deferred/lower-priority; stub at `slice-a-patent-screening.md`)
 
 0. **Slice E — Spacetime NBI integration: DESIGN DONE, adversarially verified (2026-07-02).**
    Design doc: `slice-e-nbi-integration.md`. 7-agent workflow `wi2lk7ugy` mapped the pull
