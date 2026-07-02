@@ -812,7 +812,7 @@ Each milestone is additive, keeps all M1 tests green, and follows the same TDD c
 - **M4 — Elevation-threshold sweep + serving-elevation CDF.** `availability_by_elevation(cell,θ)` via broadcast on `max_elev`; monotonicity assert. (Design §4.)
 - **M5 — `terminals/` (UT distributions).** `TerminalSet` + seeded generators (uniform/population/hotspot/polygon/CSV); user-weighted availability + %-users-covered. (Design §4, SA4.)
 - **M6 — In-view interval family.** Per-(sat,cell/UT) intervals + distributions + count/frequency + in-view fraction; censoring flags; in-view-fraction == availability cross-check. (Design §4, SA7.)
-- **M7 — Population raster ingest + min-N sweep.** Public dataset loader → %-cells & population-weighted %-users; coverage-vs-N sweep with optional `target_availability`/`k_coverage`; full curve always emitted. (Design §4, D1.)
+- **M7 — Min-N sweep. ✓ DONE (2026-07-01, %-of-area metric).** `sweep.min_sat_sweep` (thin a Walker shell by sats/plane → total N; per-cell availability → % of AOR cells ≥ target at k), `plot_min_sat_sweep` (coverage-vs-N + min-N marker), `MinSatSweep` UI + notebook section, CSV. Jio primary/India example: min N ≈ 800 for 95% of area @ 99% avail, k=1. **Deferred:** population-weighted %-users (needs public raster loader — D1). (Design §4.)
 - **M8 — `cell_layout` inert metadata + layout-independence CI guard + outputs vs lat & global heatmap.** Stamp `cell_layout` into manifest/headers; CI guard (data bit-identical across layout values); finish outputs 1 (sats-in-view vs lat) & 2 (global heatmap). (Design §4, SA8.)
 
 **Multi-worker scaling (N7)** enters the testing strategy from M3 onward (shards are embarrassingly parallel; validate 1→n equivalence).

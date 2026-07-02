@@ -76,8 +76,11 @@ sweep (M4), terminals/UT (M5), in-view intervals (M6), population+min-N sweep (M
 
 ## Current Focus
 
-Slice A **Milestones 1 (MVP) + 3 (sharding) complete and tested** (30/30). Engine now scales via
-single-owner H3 shards + conservative pre-filter + time-chunking. Colab-verified: notebook loads
+Slice A: **M1 (MVP) + M3 (sharding) + M7 (min-N sweep) done + interactive Colab notebook**
+(42 tests). Engine scales via single-owner H3 shards + conservative pre-filter + time-chunking.
+Notebook = Coverage Explorer (country-shape H3 fill over borders, tabs, run progress, opacity)
++ Minimum-satellite sweep (coverage-vs-N, min-N marker). Jio/India example: min N ≈ 800 for
+95% of area @ 99% availability, k=1 (single 48° shell). Colab-verified: notebook loads
 from remote **`github.com/luca-aalyria/spacetime-sls`** (aalyria org blocks the Colab OAuth app;
 use a personal repo + `GITHUB_TOKEN` secret for private). Notebook uses **non-editable** install
 (pip `-e` doesn't import in a running Colab kernel).

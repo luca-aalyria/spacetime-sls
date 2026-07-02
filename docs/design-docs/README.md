@@ -22,6 +22,10 @@
 - [slice-a-implementation-plan.md](slice-a-implementation-plan.md) — **Slice A implementation plan** (MVP-first, TDD; M1 done, M2–M8 roadmap).
 - _Slice B (capacity/link-budget/beam-hopping), C (optimization/interference/3D viewer), D (NMTS export), E (Spacetime NBI integration) — written when reached._
 
+## Status
+
+- [recap.md](recap.md) — where we are vs the original spec & customer requirements (gap analysis).
+
 ## Process
 
 - [brainstorming.md](brainstorming.md) — Decisions log from the brainstorming sessions (Q&A, rationale).
