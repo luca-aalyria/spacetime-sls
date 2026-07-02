@@ -151,3 +151,20 @@ def test_sweep_ui_single_and_range(tmp_path):
     ui.run()
     assert ui.last_mode == "min_N_vs_incl"
     assert [b["inclination"] for b in ui.last_result["by_inclination"]] == [48.0, 53.0]
+
+
+def test_sweep_ui_multi_shape_mode(tmp_path):
+    from ngso_sls.explorer import MinSatSweep
+    ui = MinSatSweep(csv_path=str(tmp_path / "m.csv"))
+    ui.planes.value = 4                 # planes_min
+    ui.planes_max.value = 6
+    ui.planes_step.value = 2            # planes = [4, 6]
+    ui.spp_min.value, ui.spp_max.value, ui.spp_step.value = 4, 8, 4
+    ui.k_values.value = (1,)
+    ui.cell_res.value = 2
+    ui.duration_min.value = 20.0
+    ui.incl_min.value = ui.incl_max.value = 53.0
+    ui.run()
+    assert ui.last_mode == "multi_shape"
+    assert len(ui.last_result["candidates"]) == 4
+    assert (tmp_path / "m.csv").exists()

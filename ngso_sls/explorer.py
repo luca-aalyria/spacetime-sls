@@ -331,7 +331,9 @@ class MinSatSweep:
         s = {"description_width": "150px"}
         L = w.Layout(width="340px")
         self.aor = w.Dropdown(options=list(AORS), value="India", description="Service area", style=s, layout=L)
-        self.planes = w.IntSlider(value=40, min=1, max=60, description="Planes", style=s, layout=L)
+        self.planes = w.IntSlider(value=40, min=1, max=60, description="Planes (min)", style=s, layout=L)
+        self.planes_max = w.IntSlider(value=40, min=1, max=60, description="Planes max", style=s, layout=L)
+        self.planes_step = w.IntSlider(value=1, min=1, max=20, description="Planes step", style=s, layout=L)
         self.altitude = w.FloatSlider(value=650, min=300, max=1500, step=10, description="Altitude km", style=s, layout=L)
         self.incl_min = w.FloatSlider(value=48, min=0, max=90, step=0.1, description="Inclination min °", style=s, layout=L)
         self.incl_max = w.FloatSlider(value=48, min=0, max=90, step=0.1, description="Inclination max °", style=s, layout=L)
@@ -362,6 +364,7 @@ class MinSatSweep:
         self.controls = w.VBox([
             _lbl("Minimum-satellite sweep — base shell (single Walker shell, thinned by sats/plane)"),
             w.HBox([self.aor, self.planes]),
+            w.HBox([self.planes_max, self.planes_step]),
             w.HBox([self.altitude, self.phasing]),
             _lbl("Inclination range (min, max, step ≥ 0.1°; a range compares inclinations)"),
             w.HBox([self.incl_min, self.incl_max, self.incl_step]),
@@ -384,12 +387,23 @@ class MinSatSweep:
 
     def compute(self, progress=None):
         """Returns (mode, result, inclinations). mode is 'coverage_vs_N' for a single inclination,
-        or 'min_N_vs_incl' for an inclination range."""
-        from .sweep import min_sat_sweep, inclination_sweep, incl_values
+        'min_N_vs_incl' for an inclination range, or 'multi_shape' when planes range has >1 value."""
+        from .sweep import min_sat_sweep, inclination_sweep, incl_values, multi_shape_sweep
         spp = list(range(self.spp_min.value, self.spp_max.value + 1, self.spp_step.value))
         ks = tuple(self.k_values.value) or (2,)
         incs = incl_values(self.incl_min.value, self.incl_max.value, self.incl_step.value)
         overlap = self.overlap_s.value if self.handover_gate.value else None
+        Pv = list(range(self.planes.value, self.planes_max.value + 1, self.planes_step.value))
+        if len(Pv) > 1:
+            res = multi_shape_sweep(AORS[self.aor.value], Pv, spp, self.altitude.value,
+                                    incs[0], min_elev_deg=self.min_elev.value, k_values=ks,
+                                    target_availability=self.target_avail.value,
+                                    area_grade=self.area_grade.value, cell_res=self.cell_res.value,
+                                    duration_s=self.duration_min.value * 60.0, step_s=self.step_s.value,
+                                    phasing=self.phasing.value, use_sharding=self.use_shard.value,
+                                    handover_gate=self.handover_gate.value,
+                                    continuity_overlap_s=overlap, progress=progress)
+            return "multi_shape", res, incs
         common = dict(min_elev_deg=self.min_elev.value, k_values=ks,
                       target_availability=self.target_avail.value, area_grade=self.area_grade.value,
                       cell_res=self.cell_res.value, duration_s=self.duration_min.value * 60.0,
@@ -442,6 +456,16 @@ class MinSatSweep:
                         mn = res["min_N_mbb"]
                         print(f"  k=1 make-before-break (≥{res['continuity_overlap_s']:g}s overlap): "
                               + (f"{mn} satellites" if mn is not None else "not reached"))
+                elif mode == "multi_shape":
+                    print(f"  {len(res['candidates'])} candidates "
+                          f"(P={res['planes_values']}, spp={res['spp_values']}):")
+                    for c in res["candidates"]:
+                        parts = "  ".join(f"k{k}={c['pct_by_k'][k]:.0%}" for k in res["k_values"])
+                        print(f"  N={c['N']:>5} ({c['planes']}P×{c['sats_per_plane']}spp)  "
+                              f"[{parts}]  pareto={c['is_pareto']}")
+                    for k in res["k_values"]:
+                        mn = res["min_N_by_k"][k]
+                        print(f"  min N k={k}: " + (f"{mn}" if mn is not None else "not reached"))
                 else:
                     print("min N by inclination:")
                     for b in res["by_inclination"]:
@@ -510,6 +534,15 @@ class MinSatSweep:
                     fig = plot_min_sat_sweep(res)
                     plt.show()
                     plt.close(fig)
+                elif mode == "multi_shape":
+                    from .viz.plots import plot_multi_shape_scatter, plot_multi_shape_heatmap
+                    k0 = res["k_values"][0]
+                    fig = plot_multi_shape_scatter(res, k=k0)
+                    plt.show()
+                    plt.close(fig)
+                    fig = plot_multi_shape_heatmap(res, k=k0)
+                    plt.show()
+                    plt.close(fig)
                 else:
                     fig = plot_inclination_coverage_curves(res)   # coverage-vs-N per inclination
                     plt.show()
@@ -555,6 +588,17 @@ def _write_sweep_csv(res: dict, mode: str, path: str, manifest: dict | None = No
                             + [f"{r['pct_by_k'][k]:.6f}" for k in ks]
                             + [f"{r['mean_avail_by_k'][k]:.6f}" for k in ks]
                             + ([f"{r['pct_mbb']:.6f}", int(r['mbb_pass'])] if mbb else []))
+        elif mode == "multi_shape":
+            mbb = res.get("continuity_overlap_s") is not None
+            f.write(f"# min_N_by_k: {res['min_N_by_k']}  min_N_mbb: {res.get('min_N_mbb')}"
+                    f"  area_grade: {res['area_grade']}  inclination: {res['inclination_deg']}\n")
+            wr.writerow(["N", "planes", "sats_per_plane"] + [f"pct_k{k}" for k in ks]
+                        + (["pct_mbb", "mbb_pass"] if mbb else []) + ["is_pareto"])
+            for c in res["candidates"]:
+                wr.writerow([c["N"], c["planes"], c["sats_per_plane"]]
+                            + [f"{c['pct_by_k'][k]:.6f}" for k in ks]
+                            + ([f"{c['pct_mbb']:.6f}", int(c['mbb_pass'])] if mbb else [])
+                            + [int(c["is_pareto"])])
         else:  # min_N_vs_incl
             f.write(f"# target_availability: {res['target_availability']}  area_grade: {res['area_grade']}"
                     f"  planes: {res['planes']}  altitude_km: {res['altitude_km']}\n")
