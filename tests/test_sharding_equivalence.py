@@ -23,6 +23,14 @@ def test_sharded_equals_monolithic_bit_identical():
     np.testing.assert_array_equal(glob["sats_in_view_mean"], shard["sats_in_view_mean"])
 
 
+def test_progress_callback_reports_all_shards():
+    calls = []
+    run_coverage_h3(_sim(), INDIA_AOR, cell_res=3, shard_res=1, chunk_steps=4,
+                    progress=lambda done, total: calls.append((done, total)))
+    assert calls[0][0] == 0                 # starts at 0/total
+    assert calls[-1][0] == calls[-1][1] >= 1  # ends at done == total
+
+
 def test_chunking_alone_is_identical():
     sim = _sim()
     one = run_coverage_h3(sim, INDIA_AOR, cell_res=3, shard_res=None, chunk_steps=None)

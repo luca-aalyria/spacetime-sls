@@ -16,6 +16,11 @@ def test_explorer_builds_and_runs(tmp_path):
     assert ex.last_result is not None
     assert "availability" in ex.last_result and "sats_in_view_mean" in ex.last_result
     assert (tmp_path / "cov.csv").exists()
+    # progress + status feedback wired
+    assert ex.progress.value == ex.progress.max
+    assert ex.progress.bar_style == "success"
+    assert "done" in ex.status.value
+    assert ex.run_btn.disabled is False and ex.run_btn.description == "Run simulation"
 
 
 def test_custom_walker_via_explorer(tmp_path):

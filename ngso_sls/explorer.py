@@ -76,6 +76,9 @@ class CoverageExplorer:
                                  style=wide, layout=w.Layout(width="360px"))
         self.use_shard = w.Checkbox(value=True, description="Use sharding (faster, identical result)")
         self.run_btn = w.Button(description="Run simulation", button_style="primary", icon="play")
+        self.progress = w.IntProgress(value=0, min=0, max=1, bar_style="info",
+                                      layout=w.Layout(width="260px"))
+        self.status = w.HTML("<i>idle</i>")
 
     def _build_layout(self):
         box = w.Layout(border="1px solid #ccc", padding="6px", margin="2px", min_height="60px")
@@ -101,6 +104,7 @@ class CoverageExplorer:
             w.HBox([self.duration_min, self.step_s]),
             w.HBox([self.k_cov, self.use_shard]),
             self.run_btn,
+            w.HBox([self.progress, self.status]),
         ])
         self.results = w.VBox([_lbl("Run log"), self.out_log, self.tabs])
 
@@ -118,13 +122,14 @@ class CoverageExplorer:
         return Constellation(tuple(replace(s, min_elev_user_deg=self.min_elev.value)
                                    for s in JIO_SCENARIOS[self.scenario.value].shells))
 
-    def compute(self) -> dict:
+    def compute(self, progress=None) -> dict:
         cons = self.build_constellation()
         sim = SimConfig(cons,
                         TimeGrid(_EPOCH, duration_s=self.duration_min.value * 60.0, step_s=self.step_s.value),
                         k_coverage=self.k_cov.value)
         res = run_coverage_h3(sim, AORS[self.aor.value], cell_res=self.cell_res.value,
-                              shard_res=(1 if self.use_shard.value else None), chunk_steps=10)
+                              shard_res=(1 if self.use_shard.value else None), chunk_steps=10,
+                              progress=progress)
         res["_sim"] = sim
         res["_total_sats"] = sum(s.walker_T for s in cons.shells)
         res["_shape"] = "; ".join(
@@ -144,32 +149,52 @@ class CoverageExplorer:
                 traceback.print_exc()
 
     def run(self, _=None):
-        with self.out_log:
-            clear_output(wait=True)
-            try:
-                res = self.compute()
-            except Exception:
+        self.run_btn.disabled = True
+        self.run_btn.description = "Running…"
+        self.status.value = "⏳ running simulation…"
+        self.progress.bar_style = "info"
+        self.progress.value = 0
+
+        def _progress(done, total):
+            self.progress.max = max(total, 1)
+            self.progress.value = done
+
+        try:
+            with self.out_log:
+                clear_output(wait=True)
+                print("Running simulation…")
+                res = self.compute(progress=_progress)
+                self.last_result = res
+                a = res["availability"]
+                print(f"Constellation: {self.scenario.value}  |  {res['_total_sats']} sats  |  {res['_shape']}")
+                print(f"Over {self.aor.value} (H3 res {self.cell_res.value}, {self.duration_min.value:.0f} min "
+                      f"@ {self.step_s.value:.0f}s, k={self.k_cov.value}):")
+                print(f"  cells={len(res['cells'])}  availability mean={a.mean():.3f} min={a.min():.3f} "
+                      f"max={a.max():.3f}  mean sats-in-view(time-avg)={res['sats_in_view_mean'].mean():.1f} "
+                      f"(max {res['sats_in_view_mean'].max():.0f})")
+                write_availability_csv(
+                    res, self.csv_path,
+                    {"scenario": self.scenario.value, "aor": self.aor.value, "total_sats": res["_total_sats"],
+                     "k_coverage": self.k_cov.value, "seed": res["_sim"].seed,
+                     "step_s": res["_sim"].time_grid.step_s, "propagator": "KeplerJ2"})
+                print(f"  wrote {self.csv_path}")
+            self.status.value = "🖼️ rendering plots…"
+            ak = self.k_cov.value
+            self._draw(self.out_avail, lambda: plot_coverage_hexmap(res, title=f"Coverage availability (k={ak}) - {self.aor.value}"))
+            self._draw(self.out_siv, lambda: plot_sats_in_view_hexmap(res, title=f"Mean satellites in view (time-avg) - {self.aor.value}"))
+            self._draw(self.out_lat, lambda: plot_sats_in_view_vs_latitude(res))
+            self._draw(self.out_hist, lambda: plot_availability_hist(res))
+            self.status.value = (f"✅ done — {len(res['cells'])} cells, availability mean "
+                                 f"{a.mean():.3f}, mean sats-in-view {res['sats_in_view_mean'].mean():.1f}")
+            self.progress.bar_style = "success"
+        except Exception:
+            with self.out_log:
                 traceback.print_exc()
-                return
-            self.last_result = res
-            a = res["availability"]
-            print(f"Constellation: {self.scenario.value}  |  {res['_total_sats']} sats  |  {res['_shape']}")
-            print(f"Over {self.aor.value} (H3 res {self.cell_res.value}, {self.duration_min.value:.0f} min "
-                  f"@ {self.step_s.value:.0f}s, k={self.k_cov.value}):")
-            print(f"  cells={len(res['cells'])}  availability mean={a.mean():.3f} min={a.min():.3f} "
-                  f"max={a.max():.3f}  mean sats-in-view={res['sats_in_view_mean'].mean():.1f} "
-                  f"(max {res['sats_in_view_mean'].max():.0f})")
-            write_availability_csv(
-                res, self.csv_path,
-                {"scenario": self.scenario.value, "aor": self.aor.value, "total_sats": res["_total_sats"],
-                 "k_coverage": self.k_cov.value, "seed": res["_sim"].seed,
-                 "step_s": res["_sim"].time_grid.step_s, "propagator": "KeplerJ2"})
-            print(f"  wrote {self.csv_path}")
-        ak = self.k_cov.value
-        self._draw(self.out_avail, lambda: plot_coverage_hexmap(res, title=f"Coverage availability (k={ak}) - {self.aor.value}"))
-        self._draw(self.out_siv, lambda: plot_sats_in_view_hexmap(res, title=f"Mean satellites in view - {self.aor.value}"))
-        self._draw(self.out_lat, lambda: plot_sats_in_view_vs_latitude(res))
-        self._draw(self.out_hist, lambda: plot_availability_hist(res))
+            self.status.value = "❌ error — see Run log"
+            self.progress.bar_style = "danger"
+        finally:
+            self.run_btn.disabled = False
+            self.run_btn.description = "Run simulation"
 
     def display(self):
         """Show controls + results together and run once (single-cell convenience)."""

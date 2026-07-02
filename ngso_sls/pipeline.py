@@ -42,6 +42,7 @@ def run_coverage_h3(
     shard_res: int | None = None,
     chunk_steps: int | None = None,
     propagator=None,
+    progress=None,
 ) -> dict:
     """Coverage on an H3 grid. [Milestone 3]
 
@@ -84,6 +85,10 @@ def run_coverage_h3(
 
     serviceable = np.zeros(n_cell, dtype=np.int64)
     sat_sum = np.zeros(n_cell, dtype=np.int64)          # sum over time of sats-in-view per cell
+    total_shards = len(shards)
+    done_shards = 0
+    if progress is not None:
+        progress(done_shards, total_shards)             # 0/total (optional UI callback)
     for cidx in shards.values():
         clat, clon = lat[cidx], lon[cidx]
         ce, cu = cell_ecef[cidx], cell_up[cidx]
@@ -92,14 +97,16 @@ def run_coverage_h3(
         else:
             mask = relevant_sat_mask(sub_lat, sub_lon, clat, clon, dil)
             sat_idx = np.nonzero(mask)[0]
-            if sat_idx.size == 0:
-                continue
-        for a, b in bounds:
-            re_chunk = r_ecef[sat_idx][:, a:b, :]            # (n_sat_s, n_chunk, 3)
-            elev = elevation_deg(ce, cu, re_chunk)           # (n_cellS, n_chunk, n_sat_s)
-            nv = (elev >= min_elev).sum(axis=-1)             # (n_cellS, n_chunk)
-            serviceable[cidx] += (nv >= sim.k_coverage).sum(axis=1)
-            sat_sum[cidx] += nv.sum(axis=1)
+        if sat_idx.size:
+            for a, b in bounds:
+                re_chunk = r_ecef[sat_idx][:, a:b, :]        # (n_sat_s, n_chunk, 3)
+                elev = elevation_deg(ce, cu, re_chunk)       # (n_cellS, n_chunk, n_sat_s)
+                nv = (elev >= min_elev).sum(axis=-1)         # (n_cellS, n_chunk)
+                serviceable[cidx] += (nv >= sim.k_coverage).sum(axis=1)
+                sat_sum[cidx] += nv.sum(axis=1)
+        done_shards += 1
+        if progress is not None:
+            progress(done_shards, total_shards)
 
     avail = serviceable / n_time
     sats_in_view_mean = sat_sum / n_time
