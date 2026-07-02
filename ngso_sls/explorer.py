@@ -75,6 +75,8 @@ class CoverageExplorer:
         self.k_cov = w.IntSlider(value=1, min=1, max=30, description="k (min sats in view)",
                                  style=wide, layout=w.Layout(width="360px"))
         self.use_shard = w.Checkbox(value=True, description="Use sharding (faster, identical result)")
+        self.hex_alpha = w.FloatSlider(value=0.55, min=0.1, max=1.0, step=0.05,
+                                       description="Cell opacity", style=s, layout=L)
         self.run_btn = w.Button(description="Run simulation", button_style="primary", icon="play")
         self.progress = w.IntProgress(value=0, min=0, max=1, bar_style="info",
                                       layout=w.Layout(width="260px"))
@@ -103,6 +105,7 @@ class CoverageExplorer:
             w.HBox([self.min_elev, self.cell_res]),
             w.HBox([self.duration_min, self.step_s]),
             w.HBox([self.k_cov, self.use_shard]),
+            w.HBox([self.hex_alpha]),
             self.run_btn,
             w.HBox([self.progress, self.status]),
         ])
@@ -180,8 +183,9 @@ class CoverageExplorer:
                 print(f"  wrote {self.csv_path}")
             self.status.value = "🖼️ rendering plots…"
             ak = self.k_cov.value
-            self._draw(self.out_avail, lambda: plot_coverage_hexmap(res, title=f"Coverage availability (k={ak}) - {self.aor.value}"))
-            self._draw(self.out_siv, lambda: plot_sats_in_view_hexmap(res, title=f"Mean satellites in view (time-avg) - {self.aor.value}"))
+            alpha = self.hex_alpha.value
+            self._draw(self.out_avail, lambda: plot_coverage_hexmap(res, title=f"Coverage availability (k={ak}) - {self.aor.value}", alpha=alpha))
+            self._draw(self.out_siv, lambda: plot_sats_in_view_hexmap(res, title=f"Mean satellites in view (time-avg) - {self.aor.value}", alpha=alpha))
             self._draw(self.out_lat, lambda: plot_sats_in_view_vs_latitude(res))
             self._draw(self.out_hist, lambda: plot_availability_hist(res))
             self.status.value = (f"✅ done — {len(res['cells'])} cells, availability mean "

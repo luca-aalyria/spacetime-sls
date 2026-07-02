@@ -13,15 +13,16 @@ def _draw_borders(ax):
     ax.add_collection(LineCollection(all_border_rings(), colors="0.25", linewidths=0.5, zorder=3))
 
 
-def _hexmap(res, values, label, title, cmap, vmin=None, vmax=None):
+def _hexmap(res, values, label, title, cmap, vmin=None, vmax=None, alpha=_HEX_ALPHA):
     """2D geographic map (matplotlib): H3 cells as translucent hexagons colored by `values`,
-    over country borders. Renders reliably in Colab/Jupyter (plain matplotlib, no JS/downloads)."""
+    over country borders. `alpha` (0-1) sets cell opacity so borders show through.
+    Renders reliably in Colab/Jupyter (plain matplotlib, no JS/downloads)."""
     polys = []
     for c in res["cells"]:
         # h3 boundary is [(lat, lng), ...]; matplotlib wants (x=lon, y=lat)
         polys.append([(lng, lat) for (lat, lng) in h3.cell_to_boundary(c)])
     pc = PolyCollection(polys, array=np.asarray(values, dtype=float), cmap=cmap,
-                        edgecolors="none", alpha=_HEX_ALPHA, zorder=2)
+                        edgecolors="none", alpha=float(alpha), zorder=2)
     pc.set_clim(vmin if vmin is not None else float(np.min(values)),
                 vmax if vmax is not None else float(np.max(values)))
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -42,17 +43,18 @@ def _hexmap(res, values, label, title, cmap, vmin=None, vmax=None):
     return fig
 
 
-def plot_coverage_hexmap(res: dict, title: str = "Coverage availability"):
+def plot_coverage_hexmap(res: dict, title: str = "Coverage availability", alpha: float = _HEX_ALPHA):
     """Geographic map of per-cell coverage availability (fraction of time, 0-1)."""
     return _hexmap(res, res["availability"], "availability (fraction of time)", title,
-                   cmap="RdYlGn", vmin=0.0, vmax=1.0)
+                   cmap="RdYlGn", vmin=0.0, vmax=1.0, alpha=alpha)
 
 
-def plot_sats_in_view_hexmap(res: dict, title: str = "Mean satellites in view (time-avg)"):
+def plot_sats_in_view_hexmap(res: dict, title: str = "Mean satellites in view (time-avg)",
+                             alpha: float = _HEX_ALPHA):
     """Geographic map of the time-averaged number of satellites in view (>= min elev) per cell.
     (Instantaneously the count is an integer; this is its mean over the run's timesteps.)"""
     return _hexmap(res, res["sats_in_view_mean"], "mean satellites in view (time-avg)", title,
-                   cmap="viridis", vmin=0.0, vmax=None)
+                   cmap="viridis", vmin=0.0, vmax=None, alpha=alpha)
 
 
 def plot_availability(res: dict):

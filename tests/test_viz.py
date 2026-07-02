@@ -56,3 +56,6 @@ def test_hexmap_returns_figure_with_polygons():
     }
     assert len(plot_coverage_hexmap(res).axes[0].collections) >= 1  # availability hexes
     assert len(plot_sats_in_view_hexmap(res).axes[0].collections) >= 1  # sats-in-view hexes
+    # configurable opacity is applied to the hex PolyCollection
+    fig = plot_coverage_hexmap(res, alpha=0.3)
+    assert any(abs((c.get_alpha() or 1.0) - 0.3) < 1e-9 for c in fig.axes[0].collections)
