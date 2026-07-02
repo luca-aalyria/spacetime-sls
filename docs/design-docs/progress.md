@@ -1,6 +1,6 @@
 # NGSO SLS Toolkit — Progress & Next Steps
 
-## Last Updated: 2026-06-27 (post solver-alignment + adversarial review)
+## Last Updated: 2026-07-02 (Slice E design done + adversarially verified)
 
 ---
 
@@ -94,12 +94,24 @@ availability histogram. Engine returns `sats_in_view_mean`; AOR presets India/CO
 
 ## Next Steps
 
-0. **Slice E — Spacetime NBI integration STARTED (2026-07-02).** Decisions: read-only pull first;
-   `spacetime-api` client; endpoint-configurable (live / Spacebox / custom); first use-case = pull
-   NMTS network model + computed routes → run/compare SLS coverage. Constraint: sandbox can't
-   install `spacetime-api` (private index) or reach an instance → build with guarded imports + a
-   mock/recorded backend (offline-testable); live path runs in Colab. Design in progress
-   (`slice-e-spacetime-integration-design` adversarial workflow).
+0. **Slice E — Spacetime NBI integration: DESIGN DONE, adversarially verified (2026-07-02).**
+   Design doc: `slice-e-nbi-integration.md`. 7-agent workflow `wi2lk7ugy` mapped the pull
+   surface from minkowski source + Rivada notebooks and ran 3 skeptic lenses (all needs-fixes;
+   every blocker/major folded into the design). Decisions: read-only pull; `spacetime-api`
+   client; endpoint-configurable (live/Spacebox/custom via notebook form); guarded subpackage
+   `ngso_sls/spacetime/` (lazy proto imports, core untouched, purity green); netsolve `Store`
+   seam + raw-elements coverage seam (`run_coverage_h3_elements`). **Key verified fixes:**
+   (a) proven **intents/provisioning** pull is the guaranteed deliverable; **NMTS→coverage** path
+   gated behind an **Increment-0 Colab capability probe** (unproven on the pip surface);
+   (b) `_deps.py` **per-surface** capability flags (pip vs bazel namespaces never coexist);
+   (c) **per-satellite epoch reconciliation** is a hard prerequisite before feeding KeplerJ2;
+   (d) **TLE/ephemeris motion** → SGP4/interpolator propagator in `spacetime/` (NOT `propagation/`,
+   whose ALLOWED_TOP excludes sgp4/skyfield), not an osculating→J2-mean shortcut;
+   (e) auth fallback must replicate `max_receive_message_length=256MB` on both paths;
+   (f) `max_alt` uses apoapsis `a(1+e)−RE_EQ` to keep the conservative-shard invariant.
+   **Awaiting owner approval → then writing-plans.** Sandbox can't install `spacetime-api`
+   (private index) or reach an instance → all default tests offline (Memory/Recorded stores);
+   live path runs in Colab.
 1. (Owner) Push repo to a git remote so the notebook's `!git clone` works in Colab.
 2. **M7 — min-N sweep** (the headline Jio answer: reduce N / raise k until coverage drops; now
    feasible at fine H3 grids thanks to M3) — or **M4** (elevation sweep) / **M5** (terminals/UT).

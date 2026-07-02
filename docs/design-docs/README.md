@@ -18,9 +18,10 @@
 
 ## Slice Designs
 
-- [slice-a-coverage-core.md](slice-a-coverage-core.md) — **Slice A: SLS engine core (offline)** — current focus.
+- [slice-a-coverage-core.md](slice-a-coverage-core.md) — **Slice A: SLS engine core (offline)**.
 - [slice-a-implementation-plan.md](slice-a-implementation-plan.md) — **Slice A implementation plan** (MVP-first, TDD; M1 done, M2–M8 roadmap).
-- _Slice B (capacity/link-budget/beam-hopping), C (optimization/interference/3D viewer), D (NMTS export), E (Spacetime NBI integration) — written when reached._
+- [slice-e-nbi-integration.md](slice-e-nbi-integration.md) — **Slice E: live Spacetime/Minkowski NBI integration** (read-only pull; adversarially verified) — **current focus.**
+- _Slice B (capacity/link-budget/beam-hopping), C (optimization/interference/3D viewer), D (NMTS export) — written when reached._
 
 ## Status
 
