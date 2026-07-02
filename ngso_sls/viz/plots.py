@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 
 from ..geodata import all_border_rings
 
-_HEX_ALPHA = 0.55  # let country borders show through the coverage cells
+_HEX_ALPHA = 0.80  # cell opacity default; lets country borders show through the coverage cells
 
 
 def _draw_borders(ax):
@@ -125,6 +125,32 @@ def plot_sats_in_view_vs_latitude(res: dict, bin_deg: float = 1.0):
     ax.set_ylabel("latitude (°)")
     ax.set_title("Satellites in view vs latitude")
     ax.grid(True, alpha=0.3)
+    return fig
+
+
+def plot_min_sat_sweep(sweep: dict):
+    """Coverage vs constellation size (matplotlib): % of AOR cells meeting the availability
+    target, and mean availability, vs total satellites N; with the area-grade line and the
+    minimum-N marker."""
+    s = sweep["sweep"]
+    N = [r["N"] for r in s]
+    pct = [100.0 * r["pct_cells_meeting_target"] for r in s]
+    mean_av = [100.0 * r["mean_availability"] for r in s]
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.plot(N, pct, "-o", ms=5, color="tab:blue",
+            label=f"% cells ≥ {sweep['target_availability']:.0%} availability")
+    ax.plot(N, mean_av, "-s", ms=3, color="0.5", alpha=0.8, label="mean availability")
+    ax.axhline(100.0 * sweep["area_grade"], ls="--", color="red", lw=1,
+               label=f"area grade {sweep['area_grade']:.0%}")
+    if sweep["min_N"] is not None:
+        ax.axvline(sweep["min_N"], ls=":", color="green", lw=1.6, label=f"min N = {sweep['min_N']}")
+    ax.set_xlabel("total satellites (N)")
+    ax.set_ylabel("percent")
+    ax.set_ylim(0, 101)
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=8, loc="lower right")
+    ax.set_title(f"Coverage vs constellation size "
+                 f"(k={sweep['k_coverage']}, {sweep['inclination_deg']:g}° @ {sweep['altitude_km']:g} km)")
     return fig
 
 

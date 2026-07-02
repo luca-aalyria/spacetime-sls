@@ -39,6 +39,10 @@ def _lbl(text):
     return w.HTML(f"<b>{text}</b>")
 
 
+def _titled(title, box):
+    return w.VBox([_lbl(title), box])
+
+
 class CoverageExplorer:
     """Builds the control panel + tabbed results and wires the run callback."""
 
@@ -75,7 +79,7 @@ class CoverageExplorer:
         self.k_cov = w.IntSlider(value=1, min=1, max=30, description="k (min sats in view)",
                                  style=wide, layout=w.Layout(width="360px"))
         self.use_shard = w.Checkbox(value=True, description="Use sharding (faster, identical result)")
-        self.hex_alpha = w.FloatSlider(value=0.55, min=0.1, max=1.0, step=0.05,
+        self.hex_alpha = w.FloatSlider(value=0.80, min=0.1, max=1.0, step=0.05,
                                        description="Cell opacity", style=s, layout=L)
         self.run_btn = w.Button(description="Run simulation", button_style="primary", icon="play")
         self.progress = w.IntProgress(value=0, min=0, max=1, bar_style="info",
@@ -204,3 +208,132 @@ class CoverageExplorer:
         """Show controls + results together and run once (single-cell convenience)."""
         display(self.controls, self.results)
         self.run()
+
+
+class MinSatSweep:
+    """Minimum-satellite sweep UI: vary a single Walker shell's size (planes x sats/plane) and
+    plot coverage vs N over the AOR, marking the smallest constellation meeting a coverage grade."""
+
+    def __init__(self, csv_path: str = "min_sat_sweep.csv"):
+        self.csv_path = csv_path
+        self.last_result = None
+        s = {"description_width": "150px"}
+        L = w.Layout(width="340px")
+        self.aor = w.Dropdown(options=list(AORS), value="India", description="Service area", style=s, layout=L)
+        self.planes = w.IntSlider(value=40, min=1, max=60, description="Planes", style=s, layout=L)
+        self.altitude = w.FloatSlider(value=650, min=300, max=1500, step=10, description="Altitude km", style=s, layout=L)
+        self.inclination = w.FloatSlider(value=48, min=0, max=90, step=1, description="Inclination deg", style=s, layout=L)
+        self.phasing = w.IntSlider(value=1, min=0, max=59, description="Phasing F", style=s, layout=L)
+        self.spp_min = w.IntSlider(value=5, min=1, max=40, description="sats/plane min", style=s, layout=L)
+        self.spp_max = w.IntSlider(value=30, min=1, max=40, description="sats/plane max", style=s, layout=L)
+        self.spp_step = w.IntSlider(value=5, min=1, max=10, description="sats/plane step", style=s, layout=L)
+        self.min_elev = w.FloatSlider(value=25, min=5, max=45, step=1, description="Min elev deg", style=s, layout=L)
+        self.k_cov = w.IntSlider(value=1, min=1, max=10, description="k (min sats in view)", style=s, layout=L)
+        self.target_avail = w.FloatSlider(value=0.99, min=0.5, max=1.0, step=0.01, description="Availability target", style=s, layout=L)
+        self.area_grade = w.FloatSlider(value=0.95, min=0.5, max=1.0, step=0.01, description="Area grade", style=s, layout=L)
+        self.cell_res = w.IntSlider(value=3, min=1, max=5, description="H3 resolution", style=s, layout=L)
+        self.duration_min = w.FloatSlider(value=30, min=10, max=240, step=10, description="Duration min", style=s, layout=L)
+        self.step_s = w.FloatSlider(value=60, min=10, max=120, step=10, description="Time step s", style=s, layout=L)
+        self.use_shard = w.Checkbox(value=True, description="Use sharding")
+        self.run_btn = w.Button(description="Run sweep", button_style="primary", icon="play")
+        self.progress = w.IntProgress(value=0, min=0, max=1, bar_style="info", layout=w.Layout(width="260px"))
+        self.status = w.HTML("<i>idle</i>")
+        box = w.Layout(border="1px solid #ccc", padding="6px", margin="2px", min_height="60px")
+        self.out_plot = w.Output(layout=box)
+        self.out_log = w.Output(layout=w.Layout(min_height="40px"))
+        self.run_btn.on_click(self.run)
+        self.controls = w.VBox([
+            _lbl("Minimum-satellite sweep — base shell (single Walker shell, thinned by sats/plane)"),
+            w.HBox([self.aor, self.planes]),
+            w.HBox([self.altitude, self.inclination]),
+            w.HBox([self.phasing, self.k_cov]),
+            _lbl("Sweep range (total N = planes x sats/plane)"),
+            w.HBox([self.spp_min, self.spp_max, self.spp_step]),
+            _lbl("Coverage grade & analysis"),
+            w.HBox([self.target_avail, self.area_grade]),
+            w.HBox([self.min_elev, self.cell_res]),
+            w.HBox([self.duration_min, self.step_s]),
+            self.use_shard,
+            self.run_btn,
+            w.HBox([self.progress, self.status]),
+        ])
+        self.results = w.VBox([_lbl("Sweep log"), self.out_log,
+                               _titled("Coverage vs constellation size", self.out_plot)])
+
+    def compute(self, progress=None) -> dict:
+        from .sweep import min_sat_sweep
+        spp = list(range(self.spp_min.value, self.spp_max.value + 1, self.spp_step.value))
+        return min_sat_sweep(
+            AORS[self.aor.value], self.planes.value, self.altitude.value, self.inclination.value,
+            spp, min_elev_deg=self.min_elev.value, k_coverage=self.k_cov.value,
+            target_availability=self.target_avail.value, area_grade=self.area_grade.value,
+            cell_res=self.cell_res.value, duration_s=self.duration_min.value * 60.0,
+            step_s=self.step_s.value, phasing=self.phasing.value,
+            use_sharding=self.use_shard.value, progress=progress)
+
+    def run(self, _=None):
+        self.run_btn.disabled = True
+        self.run_btn.description = "Running…"
+        self.status.value = "⏳ running sweep…"
+        self.progress.bar_style = "info"
+        self.progress.value = 0
+
+        def _progress(done, total):
+            self.progress.max = max(total, 1)
+            self.progress.value = done
+
+        try:
+            with self.out_log:
+                clear_output(wait=True)
+                n = len(range(self.spp_min.value, self.spp_max.value + 1, self.spp_step.value))
+                print(f"Sweeping {n} constellations over {self.aor.value} "
+                      f"({self.planes.value} planes @ {self.inclination.value:g}°/{self.altitude.value:g}km, "
+                      f"k={self.k_cov.value})…")
+                res = self.compute(progress=_progress)
+                self.last_result = res
+                for r in res["sweep"]:
+                    print(f"  N={r['N']:>5}  ({r['sats_per_plane']}/plane)  "
+                          f"cells≥target={r['pct_cells_meeting_target']:.1%}  "
+                          f"mean avail={r['mean_availability']:.3f}  "
+                          f"mean sats-in-view={r['mean_sats_in_view']:.1f}")
+                mn = res["min_N"]
+                print(f"\nMinimum N meeting {res['area_grade']:.0%} of area at "
+                      f"{res['target_availability']:.0%} availability (k={res['k_coverage']}): "
+                      + (f"{mn} satellites" if mn is not None else "not reached in this sweep range"))
+                _write_sweep_csv(res, self.csv_path)
+                print(f"wrote {self.csv_path}")
+            self.status.value = "🖼️ rendering…"
+            with self.out_plot:
+                clear_output(wait=True)
+                try:
+                    from .viz.plots import plot_min_sat_sweep
+                    plot_min_sat_sweep(res)
+                    plt.show()
+                except Exception:
+                    traceback.print_exc()
+            self.status.value = (f"✅ done — min N = {res['min_N']}" if res["min_N"] is not None
+                                 else "✅ done — target not reached in range")
+            self.progress.bar_style = "success"
+        except Exception:
+            with self.out_log:
+                traceback.print_exc()
+            self.status.value = "❌ error — see Sweep log"
+            self.progress.bar_style = "danger"
+        finally:
+            self.run_btn.disabled = False
+            self.run_btn.description = "Run sweep"
+
+
+def _write_sweep_csv(res: dict, path: str):
+    import csv
+    with open(path, "w", newline="") as f:
+        f.write(f"# aor_min_N: {res['min_N']}  target_availability: {res['target_availability']}"
+                f"  area_grade: {res['area_grade']}  k_coverage: {res['k_coverage']}\n")
+        wr = csv.writer(f)
+        wr.writerow(["N", "planes", "sats_per_plane", "pct_cells_meeting_target",
+                     "mean_availability", "mean_sats_in_view"])
+        for r in res["sweep"]:
+            wr.writerow([r["N"], r["planes"], r["sats_per_plane"],
+                         f"{r['pct_cells_meeting_target']:.6f}", f"{r['mean_availability']:.6f}",
+                         f"{r['mean_sats_in_view']:.6f}"])
+
