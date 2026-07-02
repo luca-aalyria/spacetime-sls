@@ -79,7 +79,10 @@ class CoverageExplorer:
         self.k_cov = w.IntSlider(value=2, min=1, max=30, description="k (min sats in view)",
                                  style=wide, layout=w.Layout(width="360px"))
         self.use_shard = w.Checkbox(value=True, description="Use sharding (faster, identical result)")
-        self.terrain_on = w.Checkbox(value=False, description="Account for terrain (demo ridge; raises horizon)")
+        self.terrain_on = w.Checkbox(value=False, description="Account for terrain (raises horizon)")
+        self.terrain_source = w.Dropdown(options=["Demo ridge (offline)", "ETOPO fetch (Colab)"],
+                                         value="Demo ridge (offline)", description="Terrain source",
+                                         style=s, layout=L)
         self.hex_alpha = w.FloatSlider(value=0.80, min=0.1, max=1.0, step=0.05,
                                        description="Cell opacity", style=s, layout=L)
         self.run_btn = w.Button(description="Run simulation", button_style="primary", icon="play")
@@ -111,6 +114,7 @@ class CoverageExplorer:
             w.HBox([self.duration_min, self.step_s]),
             w.HBox([self.k_cov, self.use_shard]),
             w.HBox([self.hex_alpha, self.terrain_on]),
+            w.HBox([self.terrain_source]),
             self.run_btn,
             w.HBox([self.progress, self.status]),
         ])
@@ -137,10 +141,20 @@ class CoverageExplorer:
                         k_coverage=self.k_cov.value)
         terrain = None
         if self.terrain_on.value:
-            from .terrain import cell_horizon_masks
             from .grids.aor import aor_bbox
+            from .terrain import cell_horizon_masks, fetch_dem_erddap, horizon_mask_from_dem
             bbox = aor_bbox(AORS[self.aor.value])
-            terrain = lambda clat, clon: cell_horizon_masks(clat, clon, bbox)  # noqa: E731
+            dem = None
+            if self.terrain_source.value.startswith("ETOPO"):
+                try:
+                    dem = fetch_dem_erddap(bbox)   # real DEM (Colab has internet)
+                except Exception:
+                    dem = None                     # fall back to the offline demo ridge
+            if dem is not None:
+                terrain = lambda clat, clon, d=dem: horizon_mask_from_dem(  # noqa: E731
+                    *d, clat, clon, n_bins=36, radius_km=400)
+            else:
+                terrain = lambda clat, clon: cell_horizon_masks(clat, clon, bbox)  # noqa: E731
         res = run_coverage_h3(sim, AORS[self.aor.value], cell_res=self.cell_res.value,
                               shard_res=(1 if self.use_shard.value else None), chunk_steps=10,
                               progress=progress, terrain=terrain)

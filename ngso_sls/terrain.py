@@ -5,13 +5,73 @@ terrain skyline in its azimuth direction. This module computes, for each ground 
 mask angle per azimuth bin from a digital elevation model (DEM). The coverage engine then requires
 `satellite_elevation >= max(min_elev, terrain_mask[cell, azimuth_bin])`.
 
-DEM = (lat_1d[M], lon_1d[L], elev_2d[M, L] in metres). Supply your own DEM, or use
-`synthetic_ridge_dem` for a demonstration (a Himalaya-like ridge). Bundling a real coarse global
-DEM is a roadmap follow-up (M9 data).
+A DEM here is (lat_1d[M] ascending, lon_1d[L] ascending in -180..180, elev_2d[M,L] in metres).
+Get one via `synthetic_ridge_dem` (demo), a loader (`dem_from_xyz_csv`, `dem_from_geotiff`), or a
+runtime fetch (`fetch_dem_erddap` — NOAA ERDDAP ETOPO, no API key, subset to a bounding box).
+
+Public DEM sources (all usable at Colab runtime):
+- NOAA ERDDAP ETOPO (no key): griddap CSV/NetCDF, bbox subset, ~1 arc-min. See `fetch_dem_erddap`.
+- OpenTopography Global DEM API (free key): demtype SRTMGL3/COP90/ETOPO1, bbox, AAIGrid/GTiff.
+  https://portal.opentopography.org/API/globaldem?demtype=SRTMGL3&south=&north=&west=&east=&outputFormat=AAIGrid&API_Key=KEY
+- Copernicus DEM GLO-90 on AWS Open Data (no key): 1°x1° COG tiles, bucket copernicus-dem-90m
+  (needs rasterio; best resolution).
 """
 import numpy as np
 
 _RE_M = 6371000.0  # mean Earth radius (m) for the curvature drop term
+
+
+def dem_from_xyz_csv(text):
+    """Parse a (latitude, longitude, elevation) CSV into (lat_1d, lon_1d, elev_2d). Skips a
+    header row and an optional units row; tolerates ERDDAP griddap CSV. Longitudes >180 are
+    wrapped to -180..180."""
+    import pandas as pd
+    import io
+    rows = []
+    for line in text.splitlines():
+        p = line.split(",")
+        if len(p) < 3:
+            continue
+        try:
+            rows.append((float(p[0]), float(p[1]), float(p[2])))
+        except ValueError:
+            continue  # header / units row
+    df = pd.DataFrame(rows, columns=["lat", "lon", "elev"])
+    df["lon"] = ((df["lon"] + 180.0) % 360.0) - 180.0
+    grid = df.pivot_table(index="lat", columns="lon", values="elev")
+    return grid.index.to_numpy(float), grid.columns.to_numpy(float), grid.to_numpy(float)
+
+
+def dem_from_geotiff(path):
+    """Load a single-band GeoTIFF DEM -> (lat_1d ascending, lon_1d ascending -180..180, elev_2d).
+    Requires rasterio (`pip install rasterio`)."""
+    import rasterio
+    with rasterio.open(path) as ds:
+        elev = ds.read(1).astype(float)
+        h, w = elev.shape
+        xs = ds.xy(np.zeros(w), np.arange(w))[0]
+        ys = ds.xy(np.arange(h), np.zeros(h))[1]
+    lon = ((np.asarray(xs) + 180.0) % 360.0) - 180.0
+    lat = np.asarray(ys)
+    if lat[0] > lat[-1]:                      # north-up raster -> flip to ascending lat
+        lat, elev = lat[::-1], elev[::-1, :]
+    order = np.argsort(lon)
+    return lat, lon[order], elev[:, order]
+
+
+def fetch_dem_erddap(bbox, dataset="etopo180", variable="altitude",
+                     server="https://coastwatch.pfeg.noaa.gov/erddap", pad_deg=1.0, timeout=60):
+    """Fetch a DEM for `bbox` from a NOAA ERDDAP griddap dataset (no API key). Returns
+    (lat_1d, lon_1d, elev_2d) in metres. `etopo180` is ~1 arc-min global relief on -180..180.
+    Raises on network/parse errors (callers may fall back to a synthetic DEM)."""
+    import urllib.request
+    la0, la1 = bbox["lat_min"] - pad_deg, bbox["lat_max"] + pad_deg
+    lo0, lo1 = bbox["lon_min"] - pad_deg, bbox["lon_max"] + pad_deg
+    q = f"{variable}%5B({la0}):({la1})%5D%5B({lo0}):({lo1})%5D"
+    url = f"{server}/griddap/{dataset}.csv?{q}"
+    with urllib.request.urlopen(url, timeout=timeout) as r:
+        text = r.read().decode("utf-8", "replace")
+    return dem_from_xyz_csv(text)
 
 
 def synthetic_ridge_dem(bbox, ridge_lat, height_m=5000.0, width_deg=1.5, res_deg=0.25):

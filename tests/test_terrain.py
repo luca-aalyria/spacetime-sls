@@ -28,6 +28,16 @@ def test_horizon_mask_is_directional():
     assert north > south + 2.0                    # and it is directional (south ~ clear)
 
 
+def test_dem_from_xyz_csv():
+    from ngso_sls.terrain import dem_from_xyz_csv
+    csv = ("latitude,longitude,altitude\n"
+           "degrees_north,degrees_east,m\n"
+           "28.0,80.0,100\n28.0,80.5,200\n28.5,80.0,300\n28.5,80.5,400\n")
+    lat, lon, elev = dem_from_xyz_csv(csv)
+    assert list(lat) == [28.0, 28.5] and list(lon) == [80.0, 80.5]
+    assert elev.shape == (2, 2) and elev[1, 1] == 400.0   # lat=28.5, lon=80.5
+
+
 def _india_sim():
     from ngso_sls.presets import jio_constellation
     from ngso_sls.config import TimeGrid, SimConfig
