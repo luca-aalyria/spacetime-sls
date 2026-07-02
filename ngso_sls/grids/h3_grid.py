@@ -13,12 +13,15 @@ def _centers(cells):
 def h3_cells_for_bbox(lat_min, lat_max, lon_min, lon_max, res):
     """H3 cells whose centroid lies in the bbox, at resolution `res`.
 
-    Returns (cells: list[str] sorted, lat: np.ndarray, lon: np.ndarray) — cell ids in a
-    canonical (sorted) order plus their center latitudes/longitudes (deg)."""
-    poly = h3.LatLngPoly(
-        [(lat_min, lon_min), (lat_min, lon_max), (lat_max, lon_max), (lat_max, lon_min)]
-    )
-    cells = sorted(h3.h3shape_to_cells(poly, res))
+    Wide longitude spans are split into <=120° segments: a single near-global rectangle
+    (e.g. -180..180) is a degenerate loop that `h3shape_to_cells` fills with 0 cells, so we
+    tile it. Returns (cells sorted, lat, lon center arrays)."""
+    edges = list(np.arange(lon_min, lon_max, 120.0)) + [lon_max]
+    cellset = set()
+    for a, b in zip(edges[:-1], edges[1:]):
+        poly = h3.LatLngPoly([(lat_min, a), (lat_min, b), (lat_max, b), (lat_max, a)])
+        cellset.update(h3.h3shape_to_cells(poly, res))
+    cells = sorted(cellset)
     lat, lon = _centers(cells)
     return cells, lat, lon
 

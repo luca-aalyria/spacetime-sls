@@ -21,6 +21,15 @@ def test_circumradius_positive_and_shrinks_with_res():
     assert cell_circumradius_deg(3) > cell_circumradius_deg(5) > 0
 
 
+def test_global_bbox_fill_nonempty():
+    from ngso_sls.grids.h3_grid import h3_cells_for_bbox
+    from ngso_sls.grids.aor import GLOBAL_AOR
+    b = GLOBAL_AOR["bbox"]
+    cells, lat, lon = h3_cells_for_bbox(b["lat_min"], b["lat_max"], b["lon_min"], b["lon_max"], 2)
+    assert len(cells) > 1000                       # full globe at res 2 (~5.8k cells)
+    assert lon.min() < -150 and lon.max() > 150    # spans the antimeridian region
+
+
 def test_country_shape_fill_is_subset_of_bbox():
     from ngso_sls.grids.h3_grid import h3_cells_for_aor, h3_cells_for_bbox
     cells, lat, lon = h3_cells_for_aor(INDIA_AOR, res=3)   # country-shape fill

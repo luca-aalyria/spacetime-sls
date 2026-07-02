@@ -61,6 +61,10 @@ def run_coverage_h3(
 
     cells, lat, lon = h3_cells_for_aor(aor, cell_res)
     n_cell = len(cells)
+    if n_cell == 0:
+        raise ValueError(
+            "AOR produced 0 H3 cells at this resolution — increase H3 resolution or check the AOR."
+        )
 
     r_eci = propagator.propagate(elems, times)
     gmst = gmst_rad(sim.time_grid.epoch_utc, times)
