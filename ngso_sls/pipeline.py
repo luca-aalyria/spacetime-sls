@@ -43,6 +43,7 @@ def run_coverage_h3(
     chunk_steps: int | None = None,
     propagator=None,
     progress=None,
+    k_values=None,
 ) -> dict:
     """Coverage on an H3 grid. [Milestone 3]
 
@@ -87,7 +88,8 @@ def run_coverage_h3(
     chunk = chunk_steps or n_time
     bounds = [(i, min(i + chunk, n_time)) for i in range(0, n_time, chunk)]
 
-    serviceable = np.zeros(n_cell, dtype=np.int64)
+    ks = sorted(set(k_values)) if k_values is not None else [sim.k_coverage]
+    serviceable = {k: np.zeros(n_cell, dtype=np.int64) for k in ks}  # #timesteps with >=k in view
     sat_sum = np.zeros(n_cell, dtype=np.int64)          # sum over time of sats-in-view per cell
     total_shards = len(shards)
     done_shards = 0
@@ -106,16 +108,19 @@ def run_coverage_h3(
                 re_chunk = r_ecef[sat_idx][:, a:b, :]        # (n_sat_s, n_chunk, 3)
                 elev = elevation_deg(ce, cu, re_chunk)       # (n_cellS, n_chunk, n_sat_s)
                 nv = (elev >= min_elev).sum(axis=-1)         # (n_cellS, n_chunk)
-                serviceable[cidx] += (nv >= sim.k_coverage).sum(axis=1)
+                for k in ks:
+                    serviceable[k][cidx] += (nv >= k).sum(axis=1)
                 sat_sum[cidx] += nv.sum(axis=1)
         done_shards += 1
         if progress is not None:
             progress(done_shards, total_shards)
 
-    avail = serviceable / n_time
-    sats_in_view_mean = sat_sum / n_time
+    availability_by_k = {k: serviceable[k] / n_time for k in ks}
+    default_k = sim.k_coverage if sim.k_coverage in availability_by_k else ks[0]
     return {
         "cells": cells, "lat": lat, "lon": lon,
-        "availability": avail, "sats_in_view_mean": sats_in_view_mean,
+        "availability": availability_by_k[default_k],       # back-compat (single-k callers)
+        "availability_by_k": availability_by_k,             # {k: per-cell availability}
+        "sats_in_view_mean": sat_sum / n_time,
         "min_elev_deg": min_elev,
     }

@@ -130,27 +130,30 @@ def plot_sats_in_view_vs_latitude(res: dict, bin_deg: float = 1.0):
 
 def plot_min_sat_sweep(sweep: dict):
     """Coverage vs constellation size (matplotlib): % of AOR cells meeting the availability
-    target, and mean availability, vs total satellites N; with the area-grade line and the
-    minimum-N marker."""
+    target vs total satellites N, one curve per k, with the area-grade line and per-k minimum-N
+    markers (k=1 = single coverage, k=2 = handover-capable dual coverage)."""
     s = sweep["sweep"]
     N = [r["N"] for r in s]
-    pct = [100.0 * r["pct_cells_meeting_target"] for r in s]
-    mean_av = [100.0 * r["mean_availability"] for r in s]
-    fig, ax = plt.subplots(figsize=(7, 5))
-    ax.plot(N, pct, "-o", ms=5, color="tab:blue",
-            label=f"% cells ≥ {sweep['target_availability']:.0%} availability")
-    ax.plot(N, mean_av, "-s", ms=3, color="0.5", alpha=0.8, label="mean availability")
-    ax.axhline(100.0 * sweep["area_grade"], ls="--", color="red", lw=1,
+    colors = {1: "tab:blue", 2: "tab:orange", 3: "tab:green", 4: "tab:red"}
+    fig, ax = plt.subplots(figsize=(7.5, 5))
+    for k in sweep["k_values"]:
+        c = colors.get(k, None)
+        pct = [100.0 * r["pct_by_k"][k] for r in s]
+        ax.plot(N, pct, "-o", ms=5, color=c, label=f"k={k}: % cells ≥ {sweep['target_availability']:.0%} avail")
+        mn = sweep["min_N_by_k"].get(k)
+        if mn is not None:
+            ax.axvline(mn, ls=":", lw=1.6, color=c)
+            ax.annotate(f"min N(k={k})={mn}", xy=(mn, 5), color=c, fontsize=8,
+                        rotation=90, va="bottom", ha="right")
+    ax.axhline(100.0 * sweep["area_grade"], ls="--", color="0.4", lw=1,
                label=f"area grade {sweep['area_grade']:.0%}")
-    if sweep["min_N"] is not None:
-        ax.axvline(sweep["min_N"], ls=":", color="green", lw=1.6, label=f"min N = {sweep['min_N']}")
     ax.set_xlabel("total satellites (N)")
-    ax.set_ylabel("percent")
+    ax.set_ylabel(f"% of area with ≥ {sweep['target_availability']:.0%} availability")
     ax.set_ylim(0, 101)
     ax.grid(True, alpha=0.3)
     ax.legend(fontsize=8, loc="lower right")
     ax.set_title(f"Coverage vs constellation size "
-                 f"(k={sweep['k_coverage']}, {sweep['inclination_deg']:g}° @ {sweep['altitude_km']:g} km)")
+                 f"({sweep['inclination_deg']:g}° @ {sweep['altitude_km']:g} km, {sweep['planes']} planes)")
     return fig
 
 
