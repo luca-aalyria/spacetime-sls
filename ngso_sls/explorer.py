@@ -358,9 +358,16 @@ class MinSatSweep:
             with self.out_plot:
                 clear_output(wait=True)
                 try:
-                    from .viz.plots import plot_min_sat_sweep, plot_inclination_sweep
-                    (plot_min_sat_sweep if mode == "coverage_vs_N" else plot_inclination_sweep)(res)
-                    plt.show()
+                    from .viz.plots import (plot_min_sat_sweep, plot_inclination_sweep,
+                                            plot_inclination_coverage_curves)
+                    if mode == "coverage_vs_N":
+                        plot_min_sat_sweep(res)
+                        plt.show()
+                    else:
+                        plot_inclination_coverage_curves(res)   # coverage-vs-N per inclination
+                        plt.show()
+                        plot_inclination_sweep(res)              # min-N-vs-inclination summary
+                        plt.show()
                 except Exception:
                     traceback.print_exc()
             self.status.value = "✅ done"

@@ -176,6 +176,32 @@ def plot_inclination_sweep(result: dict):
     return fig
 
 
+def plot_inclination_coverage_curves(result: dict):
+    """Coverage vs constellation size, one curve per inclination (color) and per k (line style).
+    Shows how %-of-area-at-target scales with N for a set of inclinations."""
+    incs = result["inclinations"]
+    ks = result["k_values"]
+    cmap = plt.cm.viridis(np.linspace(0, 1, max(len(incs), 1)))
+    styles = {1: "--", 2: "-", 3: ":", 4: "-."}
+    fig, ax = plt.subplots(figsize=(8, 5.5))
+    for ci, b in enumerate(result["by_inclination"]):
+        N = [r["N"] for r in b["sweep"]]
+        for k in ks:
+            pct = [100.0 * r["pct_by_k"][k] for r in b["sweep"]]
+            ax.plot(N, pct, styles.get(k, "-"), marker="o", ms=3, color=cmap[ci],
+                    label=(f"{b['inclination']:g}°" if k == ks[0] else None))
+    ax.axhline(100.0 * result["area_grade"], ls=":", color="0.4", lw=1)
+    ax.set_xlabel("total satellites (N)")
+    ax.set_ylabel(f"% of area ≥ {result['target_availability']:.0%} availability")
+    ax.set_ylim(0, 101)
+    ax.grid(True, alpha=0.3)
+    ax.legend(title="inclination", fontsize=8, ncol=2)
+    kdesc = ", ".join(f"k={k} {styles.get(k, '-')}" for k in ks)
+    ax.set_title(f"Coverage vs constellation size by inclination "
+                 f"({result['planes']} planes @ {result['altitude_km']:g} km; {kdesc})")
+    return fig
+
+
 def plot_availability_hist(res: dict, bins: int = 20):
     """Distribution of per-cell coverage availability (matplotlib)."""
     fig, ax = plt.subplots(figsize=(6, 4))

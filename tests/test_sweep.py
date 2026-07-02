@@ -65,6 +65,28 @@ def test_inclination_sweep_engine():
     assert calls[-1] == (4, 4)                      # 2 inclinations x 2 sizes
 
 
+def test_inclination_coverage_curves_plot():
+    from ngso_sls.viz.plots import plot_inclination_coverage_curves
+    result = {
+        "inclinations": [48.0, 53.0], "k_values": [1, 2],
+        "target_availability": 0.99, "area_grade": 0.95, "planes": 40, "altitude_km": 650.0,
+        "by_inclination": [
+            {"inclination": 48.0, "min_N_by_k": {1: 400, 2: 600},
+             "sweep": [{"N": 400, "sats_per_plane": 10, "mean_sats_in_view": 3.0,
+                        "pct_by_k": {1: 0.7, 2: 0.4}, "mean_avail_by_k": {1: 0.9, 2: 0.6}},
+                       {"N": 600, "sats_per_plane": 15, "mean_sats_in_view": 4.5,
+                        "pct_by_k": {1: 1.0, 2: 0.97}, "mean_avail_by_k": {1: 1.0, 2: 0.99}}]},
+            {"inclination": 53.0, "min_N_by_k": {1: 400, 2: 600},
+             "sweep": [{"N": 400, "sats_per_plane": 10, "mean_sats_in_view": 3.2,
+                        "pct_by_k": {1: 0.75, 2: 0.45}, "mean_avail_by_k": {1: 0.92, 2: 0.65}},
+                       {"N": 600, "sats_per_plane": 15, "mean_sats_in_view": 4.7,
+                        "pct_by_k": {1: 1.0, 2: 0.98}, "mean_avail_by_k": {1: 1.0, 2: 0.99}}]},
+        ],
+    }
+    ax = plot_inclination_coverage_curves(result).axes[0]
+    assert len(ax.get_lines()) >= 4      # 2 inclinations x 2 k curves
+
+
 def test_incl_values_granularity():
     from ngso_sls.sweep import incl_values
     assert incl_values(50.0, 50.5, 0.1) == [50.0, 50.1, 50.2, 50.3, 50.4, 50.5]
