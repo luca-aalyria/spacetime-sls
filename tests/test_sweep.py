@@ -38,7 +38,7 @@ def test_min_sat_sweep_mbb_gate():
     res = min_sat_sweep(AORS["India"], planes=6, altitude_km=650.0, inclination_deg=53.0,
                         sats_per_plane_values=[4, 8], k_values=(1,),
                         target_availability=0.95, area_grade=0.90, min_elev_deg=25.0,
-                        cell_res=2, duration_s=1800.0, step_s=60.0,
+                        cell_res=2, duration_s=1800.0, step_s=10.0,
                         continuity_overlap_s=30.0)
     assert "min_N_mbb" in res and res["continuity_overlap_s"] == 30.0
     for r in res["sweep"]:

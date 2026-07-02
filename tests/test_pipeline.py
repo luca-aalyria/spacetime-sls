@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from datetime import datetime, timezone
 from ngso_sls.presets import jio_constellation
 from ngso_sls.config import Shell, Constellation, TimeGrid, SimConfig, constellation_model
@@ -43,3 +44,21 @@ def test_apoapsis_max_alt_used(monkeypatch):
     run_coverage_h3_elements(elems, np.zeros(1, np.int64), 25.0, tg, AORS["India"],
                              cell_res=2, shard_res=1, chunk_steps=5)
     assert captured["max_alt"] > 650.0 + 1.0        # apoapsis, not a-RE_EQ (=650)
+
+
+def test_nyquist_precondition_raises_when_step_too_coarse():
+    sim = SimConfig(Constellation((Shell("s", 24, 6, 1, 650.0, 53.0, min_elev_user_deg=25.0),)),
+                    TimeGrid(datetime(2026, 1, 1, tzinfo=timezone.utc), 1200.0, 60.0))
+    # tau=30s but step=60s violates step <= 0.5*tau -> must raise
+    with pytest.raises(ValueError, match="step_s"):
+        run_coverage_h3(sim, AORS["India"], cell_res=2, shard_res=1, chunk_steps=5,
+                        continuity_overlap_s=30.0)
+
+
+def test_continuity_outputs_carry_resolution_metadata():
+    sim = SimConfig(Constellation((Shell("s", 24, 6, 1, 650.0, 53.0, min_elev_user_deg=25.0),)),
+                    TimeGrid(datetime(2026, 1, 1, tzinfo=timezone.utc), 1200.0, 5.0))
+    res = run_coverage_h3(sim, AORS["India"], cell_res=2, shard_res=1, chunk_steps=20,
+                          continuity_overlap_s=30.0)
+    assert res["detection_step_s"] == 5.0 and "refine_tol_s" in res
+    assert res["mbb_feasible"].shape == (len(res["cells"]),)

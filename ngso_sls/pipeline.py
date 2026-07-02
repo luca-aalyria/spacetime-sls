@@ -144,10 +144,15 @@ def run_coverage_h3_elements(
     do_mbb = continuity_overlap_s is not None
     if do_mbb:
         step = time_grid.step_s
+        if continuity_overlap_s > 0 and step > 0.5 * continuity_overlap_s:
+            raise ValueError(
+                f"step_s ({step}s) too coarse for a {continuity_overlap_s}s overlap gate; "
+                f"require step_s <= 0.5*overlap ({0.5 * continuity_overlap_s}s)")
         # Conservative: `ov` shared samples guarantee (ov-1)*step of continuous 2-sat visibility,
         # so require ov >= overlap_s/step + 1 (>=1 shared sample even at overlap_s=0).
         min_overlap_steps = (int(np.ceil(continuity_overlap_s / step)) + 1
                              if continuity_overlap_s > 0 else 1)
+        refine_tol_s = min(1.0, step / 10.0)
         mbb_feasible = np.zeros(n_cell, dtype=bool)
         mbb_worst_steps = np.full(n_cell, -1, dtype=np.int64)
         mbb_n_handovers = np.full(n_cell, -1, dtype=np.int64)
@@ -216,5 +221,7 @@ def run_coverage_h3_elements(
             "mbb_overlap_worst_s": worst_s,                 # worst valid handover overlap (s)
             "mbb_n_handovers": mbb_n_handovers,
             "continuity_overlap_s": float(continuity_overlap_s),
+            "detection_step_s": float(step),
+            "refine_tol_s": float(refine_tol_s),
         })
     return out

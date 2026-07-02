@@ -54,6 +54,7 @@ def test_explorer_handover_gate_and_params(tmp_path):
     ex.scenario.value = "~200 @48° (minimal)"
     ex.cell_res.value = 2
     ex.duration_min.value = 20.0
+    ex.step_s.value = 10.0      # satisfy Nyquist: step_s <= 0.5 * overlap_s (10 <= 15)
     ex.k_cov.value = 1
     ex.handover_gate.value = True
     ex.overlap_s.value = 30.0

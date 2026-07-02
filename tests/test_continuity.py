@@ -85,7 +85,7 @@ def test_continuity_map_shapes():
 def _small_sim():
     shell = Shell("s", 24, 6, 1, 650.0, 53.0, min_elev_user_deg=25.0)
     return SimConfig(Constellation((shell,)),
-                     TimeGrid(datetime(2026, 1, 1, tzinfo=timezone.utc), 1800.0, 60.0))
+                     TimeGrid(datetime(2026, 1, 1, tzinfo=timezone.utc), 1800.0, 10.0))
 
 
 def test_pipeline_continuity_outputs():
