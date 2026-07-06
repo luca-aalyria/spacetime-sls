@@ -21,7 +21,8 @@
 - [slice-a-coverage-core.md](slice-a-coverage-core.md) — **Slice A: SLS engine core (offline)**.
 - [slice-a-implementation-plan.md](slice-a-implementation-plan.md) — **Slice A implementation plan** (MVP-first, TDD; M1 done, M2–M8 roadmap).
 - [slice-a-patent-screening.md](slice-a-patent-screening.md) — **Slice A: patent-shape screening post-check** (⏸️ deferred stub — flags shapes resembling patented geometries; engineering flag, not legal FTO).
-- [slice-e-nbi-integration.md](slice-e-nbi-integration.md) — **Slice E: live Spacetime/Minkowski NBI integration** (read-only pull; adversarially verified; ⏸️ parked).
+- [slice-e-nbi-integration.md](slice-e-nbi-integration.md) — **Slice E: live Spacetime/Minkowski NBI integration** (read-only pull; adversarially verified). **▶️ current focus.**
+- [slice-e-implementation-plan.md](slice-e-implementation-plan.md) — **Slice E implementation plan** (12 TDD tasks: guarded `_deps` → endpoint → EntityStore → MemoryStore+fixtures → NMTS adapter → GrpcEntityStore → RecordedStore → pull → CSV → packaging → Colab notebook; offline-testable, live path guarded for Colab).
 - [slice-a-revisions.md](slice-a-revisions.md) — **Slice A revisions (current focus):** generalized (non-Walker) constellation generators + full make-before-break handover continuity + multi-shape P×spp sweep. Adversarially verified (workflow `wxiaf4yi2`); k=1 MBB increment already shipped.
 - [slice-a-revisions-implementation-plan.md](slice-a-revisions-implementation-plan.md) — **Slice A revisions implementation plan** (12 TDD tasks: model+generators → config → pipeline seam → continuity → refine → sweep → viz → explorer).
 - _Slice B (capacity/link-budget/beam-hopping), C (optimization/interference/3D viewer), D (NMTS export) — written when reached._
