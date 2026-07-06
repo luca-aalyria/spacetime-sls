@@ -114,10 +114,10 @@ or move to Slice B (capacity/link budget).
    whose ALLOWED_TOP excludes sgp4/skyfield), not an osculating→J2-mean shortcut;
    (e) auth fallback must replicate `max_receive_message_length=256MB` on both paths;
    (f) `max_alt` uses apoapsis `a(1+e)−RE_EQ` to keep the conservative-shard invariant.
-   **⏸️ PARKED (2026-07-02)** — owner returned to Slice A for substantial revisions before
-   implementing Slice E. Resume via writing-plans against `slice-e-nbi-integration.md`.
-   Sandbox can't install `spacetime-api` (private index) or reach an instance → all default
-   tests offline (Memory/Recorded stores); live path runs in Colab.
+   **▶️ RESUMED (2026-07-02)** — Slice A revisions shipped; back on Slice E. Producing the
+   implementation plan via writing-plans against `slice-e-nbi-integration.md`, then
+   subagent-driven execution. Sandbox can't install `spacetime-api` (private index) or reach an
+   instance → all default tests offline (Memory/Recorded stores); live path runs in Colab.
 1. (Owner) Push repo to a git remote so the notebook's `!git clone` works in Colab.
 2. **M7 — min-N sweep** (the headline Jio answer: reduce N / raise k until coverage drops; now
    feasible at fine H3 grids thanks to M3) — or **M4** (elevation sweep) / **M5** (terminals/UT).
