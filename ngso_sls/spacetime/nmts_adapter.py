@@ -65,14 +65,14 @@ def platforms_to_elements(entities, relationships, *, ref_epoch_s: float | None 
         raan = np.radians(float(_get(kep, "raan_deg")))
         argp = np.radians(float(_get(kep, "argument_of_periapsis_deg", 0.0)))
         M = _true_to_mean(np.radians(float(_get(kep, "true_anomaly_deg"))), ecc)
-        # epoch reconciliation to the common reference epoch (two-body mean-motion advance).
-        # A satellite whose epoch is dt AFTER t_ref has advanced by n0*dt from its t_ref state,
-        # so its mean anomaly at t_ref = M_raw - n0*(t_epoch - t_ref) = M_raw + n0*(t_ref - t_epoch).
-        # Equivalently: M(t_ref) = M_epoch + n0*(t_epoch - t_ref) where M_epoch is M at t_epoch.
-        # The sign here reconciles mean anomaly FORWARD from the element epoch to t_ref.
+        # Epoch reconciliation: compute M at the common reference epoch t_ref.
+        # Physics: M_abs(t) = M_epoch + n0*(t - t_epoch), so
+        #   M(t_ref) = M_epoch + n0*(t_ref - t_epoch).
+        # A satellite whose element epoch is dt AFTER t_ref had not yet reached its
+        # epoch position at t_ref, so its M at t_ref is M_raw - n0*dt (negative shift).
         n0 = np.sqrt(MU_EARTH / a_km ** 3)
         t_epoch = _epoch_s(kep)
-        M = (M + n0 * (t_epoch - t_ref)) % (2 * np.pi)
+        M = (M + n0 * (t_ref - t_epoch)) % (2 * np.pi)
         elems[i] = [a_km, ecc, inc, raan, argp, M]
         meta.append({"sat_id": pid, "name": _get(plat, "name"),
                      "epoch_utc_s": t_ref, "motion_kind": "keplerian",

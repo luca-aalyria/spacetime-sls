@@ -50,9 +50,11 @@ def test_epoch_reconciliation_advances_mean_anomaly():
     ]
     res = platforms_to_elements(ents, [], ref_epoch_s=1000.0)
     m0, m1 = res["elems"][0, 5], res["elems"][1, 5]
-    # s0 at ref epoch -> M0 ~ 0; s1 started dt later, reconciled back to ref -> M advanced by n0*dt
+    # s0 epoch == t_ref -> M0 = 0 (no shift).
+    # s1 epoch is dt AFTER t_ref: at t_ref it had not yet reached its epoch position,
+    # so its reconciled M = M_raw + n0*(t_ref - t_epoch) = 0 - n0*dt (negative shift mod 2π).
     assert abs(m0) < 1e-9
-    assert abs(((m1 - n0 * dt) % (2 * np.pi))) < 1e-6
+    assert abs(((m1 + n0 * dt) % (2 * np.pi))) < 1e-6
     assert res["ref_epoch_s"] == 1000.0
 
 
