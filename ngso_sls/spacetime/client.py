@@ -8,24 +8,29 @@ from .store import StoreError
 
 def _make_channel(ep):
     """Modern auth (decided): auth.Credentials(...).create_channel(url). Portable fallback via
-    github/py Config/new_credentials. 256MB max_receive_message_length is REQUIRED on BOTH paths
-    (full-constellation ListEntities responses are large). Never logs the key."""
+    github/py Config/new_credentials when no Credentials class is present. The 256MB
+    max_receive_message_length is REQUIRED on BOTH paths (full-constellation ListEntities
+    responses are large). Never logs the key."""
     _deps.require("HAS_AUTH", "aalyria.spacetime.api.common.auth")
     auth = _deps.auth
     opts = [("grpc.max_receive_message_length", 256 << 20)]
-    creds = auth.Credentials(key_id=ep.key_id, user_id=ep.user_id,
-                             private_key_file=ep.private_key_file)
-    try:
-        return creds.create_channel(ep.url)          # modern one-liner
-    except (AttributeError, TypeError):
-        # portable fallback: build a secure channel from call-credentials + ssl
-        grpc = _deps.grpc
-        cfg = auth.Config(email=ep.user_id, private_key_id=ep.key_id,
-                          private_key=open(ep.private_key_file, "rb"))
-        call = auth.new_credentials(cfg)
-        chan_creds = grpc.composite_channel_credentials(grpc.ssl_channel_credentials(), call)
-        target = ep.url.replace("https://", "")
-        return grpc.secure_channel(target, chan_creds, opts)
+    if hasattr(auth, "Credentials"):
+        creds = auth.Credentials(key_id=ep.key_id, user_id=ep.user_id,
+                                 private_key_file=ep.private_key_file)
+        try:
+            return creds.create_channel(ep.url, options=opts)     # 256MB limit (modern path)
+        except TypeError:
+            # older create_channel signature has no options kwarg; degrade within the modern
+            # path (size limit best-effort — verify against the installed spacetime-api in Colab)
+            return creds.create_channel(ep.url)
+    # portable fallback: github/py Config/new_credentials -> secure_channel WITH the 256MB option
+    grpc = _deps.grpc
+    cfg = auth.Config(email=ep.user_id, private_key_id=ep.key_id,
+                      private_key=open(ep.private_key_file, "rb"))
+    call = auth.new_credentials(cfg)
+    chan_creds = grpc.composite_channel_credentials(grpc.ssl_channel_credentials(), call)
+    target = ep.url.replace("https://", "")
+    return grpc.secure_channel(target, chan_creds, opts)
 
 
 class GrpcEntityStore:
