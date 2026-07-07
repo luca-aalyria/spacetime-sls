@@ -1,6 +1,6 @@
 # NGSO SLS Toolkit — Progress & Next Steps
 
-## Last Updated: 2026-07-02 (SA13 different-plane + worst-gap live; 94 tests)
+## Last Updated: 2026-07-07 (Slice E Increment-1 offline complete; 113 tests)
 
 ---
 
@@ -70,16 +70,13 @@ sweep (M4), terminals/UT (M5), in-view intervals (M6), population+min-N sweep (M
 - [ ] Slice B — capacity, link budget, demand, beam-hopping scheduler
 - [ ] Slice C — optimization, interference, Cesium 3D viewer
 - [ ] Slice D — NMTS export (reuse `scenarios/builder/py`)
-- [ ] Slice E — live Spacetime/Minkowski NBI integration
+- [x] Slice E — Increment-1 IMPLEMENTED (offline, subagent-driven, 113 tests): guarded ngso_sls/spacetime/ (EntityStore + MemoryStore/RecordedStore/GrpcEntityStore, NMTS adapter w/ epoch reconciliation, pull_and_cover reusing run_coverage_h3_elements), 05_slice_e_pull.ipynb; DEFERRED: Sgp4/TLE, legacy NetOps fallback, live @integration tests
 
 ---
 
 ## Current Focus
 
-Slice A: **SA12–SA14 COMPLETE (92 tests, 2026-07-02).** Generalized constellation model,
-full MBB handover-continuity, multi-shape sweep + viz, explorer planes-range. Slice A MVP
-(M1+M3+M7) + interactive Colab notebook remain validated. Next: resume Slice E NBI integration
-or move to Slice B (capacity/link budget).
+**Slice E Increment-1 COMPLETE (2026-07-07, 113 tests).** Guarded `ngso_sls/spacetime/` subpackage shipped: `_deps/config/store/memory_store/recording/nmts_adapter/client/pull`, elements CSV, packaging, Colab notebook `05_slice_e_pull.ipynb`. All tests green. Next: push repo to a git remote (notebook `!git clone`), then Slice B (capacity/link budget) or Slice E live @integration tests.
 
 ## Next Steps
 
@@ -99,25 +96,7 @@ or move to Slice B (capacity/link budget).
       (lazy plotly); Explorer planes-range + multi_shape + CSV.
     (SA15 patent-shape screening: deferred/lower-priority; stub at `slice-a-patent-screening.md`)
 
-0. **Slice E — Spacetime NBI integration: DESIGN DONE, adversarially verified (2026-07-02).**
-   Design doc: `slice-e-nbi-integration.md`. 7-agent workflow `wi2lk7ugy` mapped the pull
-   surface from minkowski source + Rivada notebooks and ran 3 skeptic lenses (all needs-fixes;
-   every blocker/major folded into the design). Decisions: read-only pull; `spacetime-api`
-   client; endpoint-configurable (live/Spacebox/custom via notebook form); guarded subpackage
-   `ngso_sls/spacetime/` (lazy proto imports, core untouched, purity green); netsolve `Store`
-   seam + raw-elements coverage seam (`run_coverage_h3_elements`). **Key verified fixes:**
-   (a) proven **intents/provisioning** pull is the guaranteed deliverable; **NMTS→coverage** path
-   gated behind an **Increment-0 Colab capability probe** (unproven on the pip surface);
-   (b) `_deps.py` **per-surface** capability flags (pip vs bazel namespaces never coexist);
-   (c) **per-satellite epoch reconciliation** is a hard prerequisite before feeding KeplerJ2;
-   (d) **TLE/ephemeris motion** → SGP4/interpolator propagator in `spacetime/` (NOT `propagation/`,
-   whose ALLOWED_TOP excludes sgp4/skyfield), not an osculating→J2-mean shortcut;
-   (e) auth fallback must replicate `max_receive_message_length=256MB` on both paths;
-   (f) `max_alt` uses apoapsis `a(1+e)−RE_EQ` to keep the conservative-shard invariant.
-   **▶️ RESUMED (2026-07-02)** — Slice A revisions shipped; back on Slice E. Producing the
-   implementation plan via writing-plans against `slice-e-nbi-integration.md`, then
-   subagent-driven execution. Sandbox can't install `spacetime-api` (private index) or reach an
-   instance → all default tests offline (Memory/Recorded stores); live path runs in Colab.
+0. **Slice E — Increment-1 IMPLEMENTED (2026-07-07, 113 tests).** Guarded `ngso_sls/spacetime/`: `_deps` (per-surface flags), `config` (SpacetimeEndpoint), `store` (EntityStore + StoreError), `memory_store`/`recording` (offline replay), `nmts_adapter` (Keplerian→elements + epoch reconciliation), `client` (GrpcEntityStore, lazy), `pull` (pull_and_cover orchestration). Elements CSV. `05_slice_e_pull.ipynb` (Colab: Increment-0 probe + connection form + pull→coverage→compare→record). DEFERRED: Sgp4/TLE, legacy NetOps fallback, live @integration tests.
 1. (Owner) Push repo to a git remote so the notebook's `!git clone` works in Colab.
 2. **M7 — min-N sweep** (the headline Jio answer: reduce N / raise k until coverage drops; now
    feasible at fine H3 grids thanks to M3) — or **M4** (elevation sweep) / **M5** (terminals/UT).

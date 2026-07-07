@@ -1,6 +1,6 @@
 # NGSO SLS Toolkit — Requirements
 
-## Last Updated: 2026-07-02
+## Last Updated: 2026-07-07
 
 Tracks requirements from the original design (`references/spacetime_ngso_sls_toolkit_brainstorming.md`, archived locally/gitignored)
 plus ones identified during design. Status: ☐ planned · ◐ in design · ☑ designed · ✓ implemented.
@@ -48,7 +48,7 @@ ceiling; shards embarrassingly parallel — multi-worker still to be wired). 29 
 | I1 | CSV in/out for all datasets | A | ☑ |
 | I2 | NMTS TextProto export (reuse `scenarios/builder/py`) | D | ☐ |
 | I3 | GeoJSON service-area / AOR support | A | ☑ |
-| I4 | Live Spacetime NBI integration (pull state / push scenarios → real Solver) | E | ☐ |
+| I4 | Live Spacetime NBI integration (pull state / push scenarios → real Solver) | E | ◐ Increment-1 offline build done (guarded subpackage, 113 tests); live pull runs in Colab; TLE/Sgp4 deferred |
 | V1 | 2D maps + statistical charts for coverage outputs | A | ☑ |
 | V2 | Cesium/WebGL 3D viewer | C | ☐ |
 
