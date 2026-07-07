@@ -13,3 +13,10 @@ def test_pull_and_cover_end_to_end_offline():
     assert out["coverage"]["availability"].shape[0] == len(out["coverage"]["cells"])
     assert "routes" in out and out["routes"]         # installed intent hop present
     assert "skipped" in out                          # external + TLE reported
+
+
+def test_pull_and_cover_raises_on_zero_served():
+    import pytest
+    store = MemoryEntityStore.from_dict({"entities": [], "relationships": [], "intents": []})
+    with pytest.raises(ValueError, match="no served Keplerian platforms"):
+        pull_and_cover(store, AORS["India"])
