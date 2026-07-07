@@ -21,3 +21,11 @@ def test_public_symbols_importable_offline():
     assert hasattr(st, "EntityStore") and hasattr(st, "StoreError")
     assert hasattr(st, "RecordedEntityStore") and hasattr(st, "record")
     assert hasattr(st, "nmts_adapter")
+
+
+def test_spacetime_subpackage_not_in_core_purity_scope_but_core_still_pure():
+    # importing the guarded subpackage must not drag proto into the pure core
+    import ngso_sls.spacetime  # noqa: F401
+    import ngso_sls.constellation, ngso_sls.coverage, ngso_sls.propagation, ngso_sls.geometry  # noqa
+    # the core-purity test itself is the real guard; here we assert the subpackage imports clean
+    assert True

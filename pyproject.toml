@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = ["numpy", "astropy", "pandas", "matplotlib", "h3", "plotly", "ipywidgets"]
 
 [project.optional-dependencies]
+spacetime = ["grpcio", "protobuf"]   # spacetime-api itself is NOT on PyPI — see notebook install cell
 oracle = ["skyfield", "sgp4"]
 dev = ["pytest"]
 
@@ -18,3 +19,4 @@ include = ["ngso_sls*"]
 
 [tool.setuptools.package-data]
 ngso_sls = ["data/*.json"]
+"ngso_sls.spacetime" = ["fixtures/*.json"]
