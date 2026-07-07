@@ -1,0 +1,36 @@
+{
+  "entities": [
+    {"id": "plat-0", "kind": 11, "platform": {"name": "SAT-0", "is_external_system": false,
+      "motion": {"entry": [{"interval": {"start": {"seconds": 0}, "end": {"seconds": 0}},
+        "keplerian_elements": {"semimajor_axis_m": 7028137.0, "eccentricity": 0.0,
+          "inclination_deg": 53.0, "raan_deg": 0.0, "argument_of_periapsis_deg": 0.0,
+          "true_anomaly_deg": 0.0, "epoch": {"seconds": 1767225600}}}]}}},
+    {"id": "plat-1", "kind": 11, "platform": {"name": "SAT-1", "is_external_system": false,
+      "motion": {"entry": [{"interval": {"start": {"seconds": 0}, "end": {"seconds": 0}},
+        "keplerian_elements": {"semimajor_axis_m": 7028137.0, "eccentricity": 0.0,
+          "inclination_deg": 53.0, "raan_deg": 60.0, "argument_of_periapsis_deg": 0.0,
+          "true_anomaly_deg": 120.0, "epoch": {"seconds": 1767225660}}}]}}},
+    {"id": "plat-ext", "kind": 11, "platform": {"name": "INTERFERER", "is_external_system": true,
+      "motion": {"entry": [{"interval": {"start": {"seconds": 0}, "end": {"seconds": 0}},
+        "keplerian_elements": {"semimajor_axis_m": 7028137.0, "eccentricity": 0.0,
+          "inclination_deg": 53.0, "raan_deg": 120.0, "argument_of_periapsis_deg": 0.0,
+          "true_anomaly_deg": 0.0, "epoch": {"seconds": 1767225600}}}]}}},
+    {"id": "plat-tle", "kind": 11, "platform": {"name": "TLE-SAT", "is_external_system": false,
+      "motion": {"entry": [{"interval": {"start": {"seconds": 0}, "end": {"seconds": 0}},
+        "tle": {"line1": "1 25544U 98067A   24001.00000000  .00000000  00000-0  00000-0 0  9990",
+                "line2": "2 25544  51.6000   0.0000 0001000   0.0000   0.0000 15.50000000000000"}}]}}},
+    {"id": "ant-0", "kind": 40, "antenna": {"type": "RF", "is_steerable": true,
+      "max_transmit_power_w": 10.0, "g_over_t_db_per_k": 5.0}},
+    {"id": "ant-1", "kind": 40, "antenna": {"type": "RF", "is_steerable": true,
+      "max_transmit_power_w": 10.0, "g_over_t_db_per_k": 5.0}}
+  ],
+  "relationships": [
+    {"kind": 4, "a": "plat-0", "z": "ant-0"},
+    {"kind": 4, "a": "plat-1", "z": "ant-1"}
+  ],
+  "intents": [
+    {"id": "intent-0", "state": "INSTALLED", "route": {"path_segments": [
+      {"src_network_node_id": "plat-0", "dst_network_node_id": "plat-1",
+       "src_interface_id": "ant-0", "dst_interface_id": "ant-1"}]}}
+  ]
+}
