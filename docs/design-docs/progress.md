@@ -76,7 +76,7 @@ sweep (M4), terminals/UT (M5), in-view intervals (M6), population+min-N sweep (M
 
 ## Current Focus
 
-**Slice E Increment-1 COMPLETE (2026-07-07, 113 tests).** Guarded `ngso_sls/spacetime/` subpackage shipped: `_deps/config/store/memory_store/recording/nmts_adapter/client/pull`, elements CSV, packaging, Colab notebook `05_slice_e_pull.ipynb`. All tests green. Next: push repo to a git remote (notebook `!git clone`), then Slice B (capacity/link budget) or Slice E live @integration tests.
+**Slice E Increment-1 COMPLETE (2026-07-07, 116 tests).** Guarded `ngso_sls/spacetime/` subpackage shipped: `_deps/config/store/memory_store/recording/nmts_adapter/client/pull` + `probe` (staged first-contact diagnostic + `python -m ngso_sls.spacetime.probe` CLI), elements CSV, packaging, Colab notebook `05_slice_e_pull.ipynb` (with a first-contact smoke-probe cell). All tests green. Enum values `ek_platform=11/ek_antenna=40/RK_CONTAINS=4` verified against `nmts.proto`. Next: push repo, then **live test run** in Colab against `fss01-demo` (smoke probe first), then Slice B or Slice E live @integration tests.
 
 ## Next Steps
 
