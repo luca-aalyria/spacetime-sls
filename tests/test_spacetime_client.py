@@ -1,11 +1,53 @@
 # tests/test_spacetime_client.py
+import base64
+import os
 import pytest
-from ngso_sls.spacetime.client import GrpcEntityStore
+from ngso_sls.spacetime.client import GrpcEntityStore, _key_bytes, _materialize_key_file
 from ngso_sls.spacetime.config import SpacetimeEndpoint
+from ngso_sls.spacetime.store import StoreError
 
 
 def _ep():
     return SpacetimeEndpoint(url="https://h:443", key_id="k", user_id="u", private_key_file="/x.key")
+
+
+def test_key_bytes_from_base64():
+    raw = b"-----BEGIN KEY-----\nabc\n-----END KEY-----\n"
+    ep = SpacetimeEndpoint(url="https://h:443", key_id="k", user_id="u",
+                           private_key_b64=base64.b64encode(raw).decode())
+    assert _key_bytes(ep) == raw
+
+
+def test_key_bytes_from_file(tmp_path):
+    p = tmp_path / "k.pem"
+    p.write_bytes(b"FILEKEY")
+    ep = SpacetimeEndpoint(url="https://h:443", key_id="k", user_id="u", private_key_file=str(p))
+    assert _key_bytes(ep) == b"FILEKEY"
+
+
+def test_key_bytes_missing_raises():
+    ep = SpacetimeEndpoint(url="https://h:443", key_id="k", user_id="u")
+    with pytest.raises(StoreError, match="no private key"):
+        _key_bytes(ep)
+
+
+def test_key_bytes_bad_base64_raises():
+    ep = SpacetimeEndpoint(url="https://h:443", key_id="k", user_id="u", private_key_b64="A")
+    with pytest.raises(StoreError, match="not valid base64"):
+        _key_bytes(ep)
+
+
+def test_materialize_key_file_is_0600_and_shredded():
+    path, cleanup = _materialize_key_file(b"SECRETKEY")
+    try:
+        assert os.path.exists(path)
+        assert (os.stat(path).st_mode & 0o777) == 0o600         # owner-only
+        with open(path, "rb") as f:
+            assert f.read() == b"SECRETKEY"
+    finally:
+        cleanup()
+    assert not os.path.exists(path)                             # cleanup removed it
+    cleanup()                                                    # idempotent (no raise)
 
 
 def test_grpc_store_raises_clear_error_without_package():

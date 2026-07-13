@@ -115,13 +115,16 @@ def format_report(report: dict) -> str:
 
 
 def _endpoint_from_env():
+    """Build an endpoint from env vars. Key: prefer KEY_DATA_B64 (base64 of the key file);
+    else SPACETIME_PRIVATE_KEY_FILE (path)."""
     import os
     from .config import SpacetimeEndpoint
     return SpacetimeEndpoint(
         url=os.environ["SPACETIME_URL"],
         key_id=os.environ["SPACETIME_KEY_ID"],
         user_id=os.environ["SPACETIME_USER_ID"],
-        private_key_file=os.environ["SPACETIME_PRIVATE_KEY_FILE"],
+        private_key_b64=os.environ.get("KEY_DATA_B64") or None,
+        private_key_file=os.environ.get("SPACETIME_PRIVATE_KEY_FILE") or None,
         model_url=os.environ.get("SPACETIME_MODEL_URL") or None,
         model_version=os.environ.get("SPACETIME_MODEL_VERSION", "v1"),
     )
