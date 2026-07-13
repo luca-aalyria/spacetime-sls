@@ -29,6 +29,24 @@ class _FakeModelStub:
         return {"id": "plat-0", "kind": 11}
 
 
+def test_model_absent_intents_work_entities_fail_clearly():
+    # A build with HAS_NBI but HAS_MODEL=False must still allow the proven intents pull, and fail
+    # the NMTS/Model path PER-OPERATION with a clear message (not at construction).
+    from ngso_sls.spacetime.store import StoreError
+    store = GrpcEntityStore.__new__(GrpcEntityStore)         # bypass __init__ (no channel)
+    store._model = None                                      # Model surface absent
+    class _Nbi:
+        def ListIntents(self, req):
+            return type("R", (), {"intents": [type("I", (), {"state": "INSTALLED"})()]})()
+    store._nbi = _Nbi()
+    store._nbi_pb2 = type("M", (), {"ListIntentsRequest": staticmethod(lambda: object())})
+    assert len(store.list_intents(states=["INSTALLED"])) == 1     # proven surface works
+    with pytest.raises(StoreError, match="Model service unavailable"):
+        store.list_entities()
+    with pytest.raises(StoreError, match="Model service unavailable"):
+        store.list_relationships()
+
+
 def test_stub_parity_reads_only_and_never_mutates():
     # inject fake stubs so we exercise the request routing offline, with no grpc/proto import
     store = GrpcEntityStore.__new__(GrpcEntityStore)          # bypass __init__ (no channel)

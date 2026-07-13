@@ -10,6 +10,7 @@ HAS_AUTH = HAS_NBI = HAS_PROVISIONING = HAS_MODEL = HAS_NMTS = False
 auth = nbi_pb2 = nbi_pb2_grpc = provisioning_pb2 = provisioning_pb2_grpc = None
 model_pb2 = model_pb2_grpc = nmts_pb2 = grpc = None
 MODEL_ROOT = None                       # which import root resolved for Model, if any
+NMTS_ROOT = None                        # which import root resolved for NMTS, if any
 
 try:
     from aalyria.spacetime.api.common import auth as _auth
@@ -33,7 +34,12 @@ try:
 except Exception:
     pass
 
-for _root in ("aalyria.spacetime.api.model.v1", "api.model.v1"):   # try pip then bazel
+# Model service: pip then bazel roots, across v1 / v1alpha / v0 (packages & instances drift —
+# e.g. a build may ship only model.v1alpha). Prefer newest stable first; record which resolved.
+_MODEL_ROOTS = tuple(f"{_base}.model.{_ver}"
+                     for _ver in ("v1", "v1alpha", "v0")
+                     for _base in ("aalyria.spacetime.api", "api"))
+for _root in _MODEL_ROOTS:
     try:
         _m = __import__(_root + ".model_pb2", fromlist=["model_pb2"])
         _mg = __import__(_root + ".model_pb2_grpc", fromlist=["model_pb2_grpc"])
@@ -42,10 +48,12 @@ for _root in ("aalyria.spacetime.api.model.v1", "api.model.v1"):   # try pip the
     except Exception:
         continue
 
-for _root in ("aalyria.spacetime.api.nmts.v1.proto", "nmts.v1.proto"):
+_NMTS_ROOTS = ("aalyria.spacetime.api.nmts.v1.proto", "aalyria.spacetime.nmts.v1.proto",
+               "nmts.v1.proto", "aalyria.spacetime.api.nmts.v2alpha.proto", "nmts.v2alpha.proto")
+for _root in _NMTS_ROOTS:
     try:
         nmts_pb2 = __import__(_root + ".nmts_pb2", fromlist=["nmts_pb2"])
-        HAS_NMTS = True
+        NMTS_ROOT, HAS_NMTS = _root, True
         break
     except Exception:
         continue

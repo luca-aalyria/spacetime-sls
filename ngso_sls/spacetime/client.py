@@ -37,14 +37,24 @@ class GrpcEntityStore:
     """EntityStore over a live Spacetime instance."""
     def __init__(self, endpoint):
         self._ep = endpoint
-        _deps.require("HAS_MODEL", "aalyria.spacetime.api.model.v1 (Model service)")
-        channel = _make_channel(endpoint)
-        self._model = _deps.model_pb2_grpc.ModelStub(channel)
+        # Construction requires only HAS_AUTH (to build the channel). Model / Nbi / Provisioning
+        # stubs are built only if their surface is present; a missing surface fails PER-OPERATION,
+        # so the proven intents/provisioning pull still works on a build that ships no Model.
+        channel = _make_channel(endpoint)            # requires HAS_AUTH
+        self._model = _deps.model_pb2_grpc.ModelStub(channel) if _deps.HAS_MODEL else None
         self._nbi = _deps.nbi_pb2_grpc.NbiStub(channel) if _deps.HAS_NBI else None
         self._prov = (_deps.provisioning_pb2_grpc.ProvisioningStub(channel)
                       if _deps.HAS_PROVISIONING else None)
         self._model_pb2 = _deps.model_pb2
         self._nbi_pb2 = _deps.nbi_pb2
+
+    def _model_or_raise(self):
+        if self._model is None:
+            raise StoreError.rpc(
+                "Model service unavailable (HAS_MODEL=False) — this spacetime-api build ships no "
+                "NMTS Model service, so the entity/relationship (NMTS→coverage) path can't run. "
+                "The NBI intents/provisioning surface is still usable (store.list_intents).")
+        return self._model
 
     # --- request factory (overridable in tests) ---
     def _req(self, name, **kw):
@@ -52,21 +62,30 @@ class GrpcEntityStore:
 
     # --- READ-ONLY surface ---
     def list_entities(self):
+        model = self._model_or_raise()
         try:
-            return list(self._model.ListEntities(self._req("ListEntitiesRequest")).entities)
+            return list(model.ListEntities(self._req("ListEntitiesRequest")).entities)
+        except StoreError:
+            raise
         except Exception as e:                       # normalize; never import grpc in callers
             raise StoreError.rpc(f"ListEntities failed: {type(e).__name__}")
 
     def list_relationships(self, cel: str | None = None):
+        model = self._model_or_raise()
         try:
             req = self._req("ListRelationshipsRequest", **({"filter": cel} if cel else {}))
-            return list(self._model.ListRelationships(req).relationships)
+            return list(model.ListRelationships(req).relationships)
+        except StoreError:
+            raise
         except Exception as e:
             raise StoreError.rpc(f"ListRelationships failed: {type(e).__name__}")
 
     def get_entity(self, entity_id: str):
+        model = self._model_or_raise()
         try:
-            return self._model.GetEntity(self._req("GetEntityRequest", entity_id=entity_id))
+            return model.GetEntity(self._req("GetEntityRequest", entity_id=entity_id))
+        except StoreError:
+            raise
         except Exception as e:
             raise StoreError.not_found(f"GetEntity({entity_id}) failed: {type(e).__name__}")
 
