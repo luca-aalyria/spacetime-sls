@@ -29,3 +29,10 @@ def test_spacetime_subpackage_not_in_core_purity_scope_but_core_still_pure():
     import ngso_sls.constellation, ngso_sls.coverage, ngso_sls.propagation, ngso_sls.geometry  # noqa
     # the core-purity test itself is the real guard; here we assert the subpackage imports clean
     assert True
+
+
+def test_reprobe_returns_flags_dict_all_false_in_sandbox():
+    import ngso_sls.spacetime as st
+    flags = st.reprobe()
+    assert set(flags) == {"HAS_AUTH", "HAS_NBI", "HAS_PROVISIONING", "HAS_MODEL", "HAS_NMTS"}
+    assert all(v is False for v in flags.values())   # no spacetime-api in the sandbox
