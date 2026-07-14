@@ -77,11 +77,25 @@ def test_model_absent_intents_work_entities_fail_clearly():
     from ngso_sls.spacetime.store import StoreError
     store = GrpcEntityStore.__new__(GrpcEntityStore)         # bypass __init__ (no channel)
     store._model = None                                      # Model surface absent
-    class _Nbi:
-        def ListIntents(self, req):
-            return type("R", (), {"intents": [type("I", (), {"state": "INSTALLED"})()]})()
-    store._nbi = _Nbi()
-    store._nbi_pb2 = type("M", (), {"ListIntentsRequest": staticmethod(lambda: object())})
+
+    # NetOps facade double: ListEntities(type=INTENT) -> Entity records with an `intent` oneof.
+    class _Intent:
+        def __init__(self, state):
+            self.state = state
+    class _Entity:
+        def __init__(self, intent):
+            self._intent = intent
+            self.intent = intent
+        def HasField(self, name):
+            return name == "intent" and self._intent is not None
+    class _NetOps:
+        def ListEntities(self, req):
+            return type("R", (), {"entities": [_Entity(_Intent("INSTALLED"))]})()
+    store._nbi = _NetOps()
+    store._nbi_pb2 = type("M", (), {
+        "ListEntitiesRequest": staticmethod(lambda **kw: object()),
+        "EntityType": type("E", (), {"INTENT": 6}),
+    })
     assert len(store.list_intents(states=["INSTALLED"])) == 1     # proven surface works
     with pytest.raises(StoreError, match="Model service unavailable"):
         store.list_entities()

@@ -101,7 +101,8 @@ class GrpcEntityStore:
         channel, self._key_cleanup = _make_channel(endpoint)     # requires HAS_AUTH
         atexit.register(self._key_cleanup)                       # shred temp key on interpreter exit
         self._model = _deps.model_pb2_grpc.ModelStub(channel) if _deps.HAS_MODEL else None
-        self._nbi = _deps.nbi_pb2_grpc.NbiStub(channel) if _deps.HAS_NBI else None
+        # Revived read-only NBI intent facade: service NetOps (ListEntities/ListEntitiesOverTime).
+        self._nbi = _deps.nbi_pb2_grpc.NetOpsStub(channel) if _deps.HAS_NBI else None
         self._prov = (_deps.provisioning_pb2_grpc.ProvisioningStub(channel)
                       if _deps.HAS_PROVISIONING else None)
         self._model_pb2 = _deps.model_pb2
@@ -168,12 +169,18 @@ class GrpcEntityStore:
             raise StoreError.not_found(f"GetEntity({entity_id}) failed: {type(e).__name__}")
 
     def list_intents(self, states=None):
+        """Current installed intents via the revived read-only NetOps facade:
+        ListEntities(type=INTENT) returns Entity records whose `intent` oneof arm carries the
+        resources.Intent. Intent is the same generated message the adapter already consumes."""
         if self._nbi is None:
-            raise StoreError.rpc("Nbi service unavailable (HAS_NBI=False)")
+            raise StoreError.rpc("NBI NetOps intent facade unavailable (HAS_NBI=False)")
+        pb = self._nbi_pb2
         try:
-            intents = list(self._nbi.ListIntents(self._nbi_pb2.ListIntentsRequest()).intents)
-        except Exception as e:
-            raise StoreError.rpc(f"ListIntents failed: {type(e).__name__}")
+            req = pb.ListEntitiesRequest(type=pb.EntityType.INTENT)
+            entities = self._nbi.ListEntities(req).entities
+        except Exception as e:                       # normalize; never import grpc in callers
+            raise StoreError.rpc(f"NetOps.ListEntities(INTENT) failed: {type(e).__name__}")
+        intents = [e.intent for e in entities if e.HasField("intent")]
         if states is not None:
             sset = set(states)
             intents = [i for i in intents if getattr(i, "state", None) in sset]

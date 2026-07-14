@@ -1,6 +1,22 @@
 # NGSO SLS Toolkit — Progress & Next Steps
 
-## Last Updated: 2026-07-07 (Slice E Increment-1 offline complete; 113 tests)
+## Last Updated: 2026-07-13 (Slice E intent-facade scaffolded: revived read-only NetOps over Store INTENT)
+
+### Slice E — key-authed intent ingest (intent facade)
+- Root-caused: raw intents live only in the internal Store; no public key-authed endpoint serves
+  them (modelfe=NMTS-only, provisioningfe=SR-TE inputs, grpcui=SRE-internal, nbi pod dead).
+- Decision: revive legacy `nbi.proto` `service NetOps` **read-only** over `Store.GetEntities(INTENT)`,
+  on the existing robot-reachable `nbi`/`nbi-v1alpha` subdomain. Design: `slice-e-intent-facade.md`.
+- Scaffolded (minkowski_ws3 branch `nbi-intent-facade`): restored proto+BUILD, `nbi/intentfe/`
+  (server + impl + test + BUILD ×2), `permissions` NetOps patterns. Read-only enforced 3 ways
+  (no write RPCs; verb→READ/WRITE map; RO-robot `model/entity/*` READ ACL).
+- SLS wired: `client.py list_intents` → `NetOps.ListEntities(type=INTENT)`; offline tests green (19/19).
+- Pending (platform env): `bazel gazelle/test/build`, push experimental image, deploy override,
+  rebuild api pip package (Python NetOps stub), populate AuthorizationConfig, live smoke.
+
+---
+
+## Prior — Last Updated: 2026-07-07 (Slice E Increment-1 offline complete; 113 tests)
 
 ---
 
