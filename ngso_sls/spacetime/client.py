@@ -181,10 +181,46 @@ class GrpcEntityStore:
         except Exception as e:                       # normalize; never import grpc in callers
             raise StoreError.rpc(f"NetOps.ListEntities(INTENT) failed: {type(e).__name__}")
         intents = [e.intent for e in entities if e.HasField("intent")]
-        if states is not None:
-            sset = set(states)
-            intents = [i for i in intents if getattr(i, "state", None) in sset]
+        return _filter_intent_states(intents, states)
+
+
+def _intent_state_name(intent):
+    """Intent state as its enum NAME ('INSTALLED', ...). Real protos store an enum int; the
+    enum descriptor maps it back to the name. Fixture dicts/doubles may already hold the
+    name — returned as-is."""
+    s = intent.get("state") if isinstance(intent, dict) else getattr(intent, "state", None)
+    if isinstance(s, int):
+        try:
+            return intent.DESCRIPTOR.fields_by_name["state"].enum_type.values_by_number[s].name
+        except Exception:
+            return s
+    return s
+
+
+def _filter_intent_states(intents, states):
+    if states is None:
         return intents
+    sset = set(states)
+    return [i for i in intents if _intent_state_name(i) in sset]
+
+
+class _NmtsEntityView:
+    """Adapter-compatible view of a raw nmts.v1.Entity. The adapter (built for the Model API
+    shape) expects `kind` as an int and the payload under a bare name (`.platform`); the raw
+    proto has an ek_* oneof whose FIELD NUMBER is that kind int (ek_platform=11,
+    ek_antenna=40). Everything else passes through to the wrapped proto."""
+    def __init__(self, proto):
+        self.proto = proto
+        self._arm = proto.WhichOneof("kind")
+        self.id = proto.id
+        self.kind = proto.DESCRIPTOR.fields_by_name[self._arm].number if self._arm else -1
+
+    def __getattr__(self, name):                     # only called for names not set above
+        arm = self.__dict__["_arm"]
+        proto = self.__dict__["proto"]
+        if arm is not None and name == arm[3:]:      # 'platform' -> proto.ek_platform
+            return getattr(proto, arm)
+        return getattr(proto, name)
 
 
 class StorageEntityStore:
@@ -233,7 +269,7 @@ class StorageEntityStore:
 
     # --- EntityStore protocol (read-only) ---
     def list_entities(self):
-        return [e.nmts_entity for e in self._get_entities("NMTS_ENTITY")
+        return [_NmtsEntityView(e.nmts_entity) for e in self._get_entities("NMTS_ENTITY")
                 if e.HasField("nmts_entity")]
 
     def list_relationships(self, cel: str | None = None):
@@ -252,11 +288,8 @@ class StorageEntityStore:
             raise StoreError.rpc(f"Store.Get({entity_id}) failed: {type(e).__name__}")
         if not resp.HasField("entity"):
             raise StoreError.not_found(f"no NMTS_ENTITY with id {entity_id!r}")
-        return resp.entity.nmts_entity
+        return _NmtsEntityView(resp.entity.nmts_entity)
 
     def list_intents(self, states=None):
         intents = [e.intent for e in self._get_entities("INTENT") if e.HasField("intent")]
-        if states is not None:
-            sset = set(states)
-            intents = [i for i in intents if getattr(i, "state", None) in sset]
-        return intents
+        return _filter_intent_states(intents, states)

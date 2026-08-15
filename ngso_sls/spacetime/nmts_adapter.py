@@ -7,7 +7,7 @@ skipped (a real Sgp4Propagator/EphemerisInterpolator is a deferred follow-up).""
 import numpy as np
 from ..constants import MU_EARTH, RE_EQ
 from ..constellation.model import _physical_plane_uid
-from ._access import _get, _epoch_s, _motion_entries, _kepler
+from ._access import _get, _epoch_s, _motion_entries, _kepler, _is_external
 
 EK_PLATFORM = 11
 EK_ANTENNA = 40
@@ -37,7 +37,7 @@ def platforms_to_elements(entities, relationships, *, ref_epoch_s: float | None 
     for e in platforms:
         pid = _get(e, "id")
         plat = _get(e, "platform")
-        is_ext = bool(_get(plat, "is_external_system", False))
+        is_ext = _is_external(plat)
         entries = _motion_entries(plat)
         kep = _kepler(entries[0]) if entries else None       # Increment-1: first entry
         if kep is None:
@@ -77,7 +77,7 @@ def platforms_to_elements(entities, relationships, *, ref_epoch_s: float | None 
         meta.append({"sat_id": pid, "name": _get(plat, "name"),
                      "epoch_utc_s": t_ref, "motion_kind": "keplerian",
                      "antenna_ids": _antenna_ids_for(pid, relationships),
-                     "is_external_system": bool(_get(plat, "is_external_system", False))})
+                     "is_external_system": _is_external(plat)})
 
     return {"elems": elems, "plane_uid": _physical_plane_uid(elems), "meta": meta,
             "skipped": skipped, "ref_epoch_s": t_ref,
