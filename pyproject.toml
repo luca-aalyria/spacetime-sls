@@ -2,7 +2,9 @@
 name = "ngso_sls"
 version = "0.0.1"
 description = "NGSO constellation coverage/availability simulator (Slice A)"
-requires-python = ">=3.12"
+# 3.11 floor: Debian bookworm hosts ship 3.11; code audited for 3.12-only syntax/stdlib
+# (none found) — Colab (3.12) and the sandbox venv (3.14) remain the primary targets.
+requires-python = ">=3.11"
 dependencies = ["numpy", "astropy", "pandas", "matplotlib", "h3", "plotly", "ipywidgets"]
 
 [project.optional-dependencies]
