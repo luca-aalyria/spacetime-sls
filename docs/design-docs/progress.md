@@ -1,6 +1,27 @@
 # NGSO SLS Toolkit — Progress & Next Steps
 
-## Last Updated: 2026-08-14 (NBI stubs vendored; GFS wildcard mirror; raw-Store port-forward path)
+## Last Updated: 2026-08-15 (live fss01-demo loop closed: dump + notebooks 05/06/07 executed live)
+
+### Slice E — live-instance analytics (sandbox → fss01-demo via port-forward, read-only)
+- Live loop VERIFIED end-to-end: `tools/sandbox_live_setup.sh` (kubectl+ADC+supervised
+  forward) → `StorageEntityStore` → nb05 full pull (150 sats, India k=1 avail 0.996,
+  2000 route hops, replay snapshot), nb06 intent analytics (gateway load 6x imbalance,
+  UT handover timeline, OISL 144+144 lattice, RK_CONTAINS validation join → 100%),
+  nb07 = notebook-01 Slice-A analysis on the LIVE constellation (10x15 @53°/1157 km;
+  global res-2: 5862 cells, k=1 mean 0.923, 87.2% fully covered; Europe elev sweep).
+- Real-proto compat fixes (found live, all unit-tested): _NmtsEntityView (ek_* oneof →
+  int kind), _is_external (message-field truthiness), _kepler (oneof default-instance),
+  intent state enum→name. 141 tests green. Dump tool → /workspace/<instance>-dump.
+- HTML exports in `outputs/notebook-exports/` (gitignored); CSVs in `outputs/`.
+- **Jio alignment (owner directive 2026-08-15):** notebooks must ultimately answer the
+  original Reliance Jio questions (min-N/k sweep over India, availability targets,
+  population-weighted coverage — M4–M7). nb07 proves engine-parity on a live
+  constellation; the Jio path additionally needs Slice D (push the 1600-sat candidate
+  INTO an instance) + solver-run + pull-back compare. See Current Focus.
+
+---
+
+## Prior — Last Updated: 2026-08-14 (NBI stubs vendored; GFS wildcard mirror; raw-Store port-forward path)
 
 ### Slice E — raw Store access path (`StorageEntityStore`, no platform deploy needed)
 - Engdoc-verified: all storage backends serve `minkowski.proto.Store` gRPC on port 9999;
