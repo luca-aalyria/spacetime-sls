@@ -21,7 +21,8 @@ cloned — sandbox venv and Colab alike.
 - **Precedence:** `ngso_sls/spacetime/_deps.py` probes pip roots first, then these bazel-layout
   roots — a rebuilt official package supersedes the NBI stubs automatically.
 - **Wiring:** put this directory on `sys.path`.
-  - venv: `echo "$(pwd)/vendor/spacetime_api_stubs" > .venv/lib/python3.14/site-packages/spacetime_api_stubs.pth`
+  - venv (RELATIVE path — survives the sandbox/host mount-path difference):
+    `echo "../../../../vendor/spacetime_api_stubs" > .venv/lib/python3.*/site-packages/spacetime_api_stubs.pth`
   - Colab/notebook: `sys.path.insert(0, f"{REPO_DIR}/vendor/spacetime_api_stubs")` before
     importing `ngso_sls.spacetime` (or call `ngso_sls.spacetime.reprobe()` after).
 - **Regenerate:** `tools/regen_spacetime_stubs.sh [minkowski_root]` (needs `grpcio-tools`,

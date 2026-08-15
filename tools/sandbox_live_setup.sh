@@ -39,10 +39,11 @@ KUBECTL_VERSION="${KUBECTL_VERSION:-v1.31.0}"
 
 BIN=/tmp/bin
 SLS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-# Sandbox env is uv-managed and separate from the host's .venv (never share a venv
-# across the mount boundary — host pip rewrites shebangs). Fallback for old checkouts.
-VENV="$SLS_ROOT/.venv-sandbox"
-[ -x "$VENV/bin/python" ] || VENV="$SLS_ROOT/.venv"
+# Unified uv-managed venv, shared sandbox<->host: interpreter lives in the mount at
+# /workspace/.uv-python, all venv-internal paths are /workspace-based (host needs
+# `sudo ln -s ~/workspace_3 /workspace` once). Rebuild: uv venv .venv --python
+# /workspace/.uv-python/cpython-3.12*/bin/python3.12 && uv sync --all-extras --active
+VENV="$SLS_ROOT/.venv"
 CA="/tmp/gke-ca-$PROJECT.pem"
 mkdir -p "$BIN"
 
