@@ -18,6 +18,15 @@
   population-weighted coverage — M4–M7). nb07 proves engine-parity on a live
   constellation; the Jio path additionally needs Slice D (push the 1600-sat candidate
   INTO an instance) + solver-run + pull-back compare. See Current Focus.
+- **nb07 v2 (2026-08-15):** nb01-style controls (AOR/res/duration/k, optional global) +
+  service parameters FROM the model — min elevation derived from NMTS `ek_antenna`
+  `field_of_regard` conic half-angles (UT 65° cone → 25° min elev; gateways 80° → 10°;
+  sats 75° nadir). India res-3 sweep: k=1 mean avail 1.000/0.996/0.657 @ 10/25/40°.
+- **Ephemeral instances (owner directive 2026-08-15):** exploration doc
+  `slice-de-ephemeral-instances.md` — spacebox IS the mechanism (gRPC SpaceboxOperator
+  Create/Destroy/Watch + TTL reaper on e2e-internal; parallel namespaces native; CLI
+  `--scenario` loads checked-in scenarios post-create; pybuilder = parameterized NMTS
+  generator). Gated on owner approval + adversarial pass (write-path policy change).
 
 ---
 
