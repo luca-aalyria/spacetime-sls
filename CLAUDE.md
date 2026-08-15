@@ -34,11 +34,19 @@ This is a program, not one project. Slices are built in order; each has its own 
 **Empirically (verified 2026-06-29):** pypi IS reachable from this sandbox and a local
 venv with the full stack works — contrary to the initial "no-internet" assumption.
 
-- **Local venv:** `/workspace/spacetime-sls/.venv` (Python 3.14.5). Installed and importing:
-  `numpy 2.5.0, pandas 3.0.4, matplotlib 3.11.0, astropy 8.0.0, pytest 9.1.1, h3 4.5.0,
-  sgp4, skyfield`. Use `.venv/bin/python` / `.venv/bin/pytest` to build and test locally.
-  Add deps with `.venv/bin/pip install ...` (works; pypi is reachable).
-- **The system interpreter `/usr/bin/python3` has no stack** — always use the venv.
+- **uv-managed environments (since 2026-08-15).** Deps are declared in `pyproject.toml`
+  (extras `spacetime`/`oracle`, dependency-group `dev`) and locked in the committed
+  `uv.lock`. TWO SEPARATE ENVS — never share a venv across the sandbox/host mount
+  boundary (host pip rewrites launcher shebangs and breaks the sandbox side):
+  - **Sandbox:** `/workspace/spacetime-sls/.venv-sandbox` (Python 3.14, gitignored).
+    Use `.venv-sandbox/bin/python -m pytest tests/ -q`. Recreate/update with
+    `UV_PYTHON_DOWNLOADS=never UV_PROJECT_ENVIRONMENT=.venv-sandbox /tmp/bin/uv sync
+    --all-extras --python /usr/bin/python3.14`, then re-add the vendored-stubs `.pth`
+    (see `vendor/spacetime_api_stubs/README.md`). uv binary: `/tmp/bin/uv` (reinstall
+    via `pip install uv` if missing).
+  - **Host:** `.venv` belongs to the HOST (uv sync default target; host runs
+    `uv sync --all-extras` with its own uv). Do not use `.venv` from the sandbox.
+- **The system interpreter `/usr/bin/python3` has no stack** — always use `.venv-sandbox`.
 - **Google Colab remains the delivery target.** Notebooks under `notebooks/` must run
   unmodified in Colab; keep deps pip-installable and pure (no Bazel, no native build).
 - **Faithful reporting still applies:** state plainly whether a result was run locally

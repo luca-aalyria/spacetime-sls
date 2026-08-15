@@ -39,7 +39,10 @@ KUBECTL_VERSION="${KUBECTL_VERSION:-v1.31.0}"
 
 BIN=/tmp/bin
 SLS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VENV="$SLS_ROOT/.venv"
+# Sandbox env is uv-managed and separate from the host's .venv (never share a venv
+# across the mount boundary — host pip rewrites shebangs). Fallback for old checkouts.
+VENV="$SLS_ROOT/.venv-sandbox"
+[ -x "$VENV/bin/python" ] || VENV="$SLS_ROOT/.venv"
 CA="/tmp/gke-ca-$PROJECT.pem"
 mkdir -p "$BIN"
 
@@ -90,8 +93,11 @@ tail -1 /tmp/spacetime-pf.log
 
 echo "== 5/5 jupyter =="
 if [ "$START_JUPYTER" = "1" ]; then
-  "$VENV/bin/pip" show jupyterlab >/dev/null 2>&1 || \
-    "$VENV/bin/pip" install -q jupyterlab ipywidgets
+  # uv-managed envs ship without pip; jupyterlab comes from the `dev` dependency group.
+  "$VENV/bin/python" -c "import jupyterlab" 2>/dev/null || {
+    echo "jupyterlab missing in $VENV — run: uv sync --all-extras (UV_PROJECT_ENVIRONMENT=$VENV)"
+    exit 1
+  }
   # /home/node is not writable in this sandbox (jupyter dies on mkdir ~/.local),
   # so give the server a private HOME under /tmp.
   mkdir -p /tmp/jupyter/home

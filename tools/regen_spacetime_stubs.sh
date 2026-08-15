@@ -14,8 +14,11 @@ set -euo pipefail
 
 MINKOWSKI_ROOT="${1:-/workspace/minkowski_ws3}"
 SLS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VENV="$SLS_ROOT/.venv"
-SP="$VENV/lib/python3.14/site-packages"
+# Sandbox env is uv-managed and separate from the host's .venv (never share a venv
+# across the mount boundary — host pip rewrites shebangs). Fallback for old checkouts.
+VENV="$SLS_ROOT/.venv-sandbox"
+[ -x "$VENV/bin/python" ] || VENV="$SLS_ROOT/.venv"
+SP=$(ls -d "$VENV"/lib/python3.*/site-packages | head -1)
 OUT="$SLS_ROOT/vendor/spacetime_api_stubs"
 
 ROOTS=(api/nbi/v1alpha/nbi.proto proto_internal/storage/storage.proto)

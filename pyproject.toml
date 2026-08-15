@@ -10,7 +10,16 @@ dependencies = ["numpy", "astropy", "pandas", "matplotlib", "h3", "plotly", "ipy
 [project.optional-dependencies]
 spacetime = ["grpcio", "protobuf"]   # spacetime-api itself is NOT on PyPI — see notebook install cell
 oracle = ["skyfield", "sgp4"]
-dev = ["pytest"]
+
+# Tooling lives in dependency-groups (uv sync installs `dev` by default; pip>=25.1: --group dev).
+[dependency-groups]
+dev = [
+    "pytest",
+    "jupyterlab",            # includes nbconvert for HTML exports
+    "nbclient",              # headless notebook execution
+    "grpcio-tools",          # tools/regen_spacetime_stubs.sh
+    "googleapis-common-protos",
+]
 
 [build-system]
 requires = ["setuptools>=68"]

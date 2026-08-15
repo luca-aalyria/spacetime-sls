@@ -7,3 +7,5 @@ outputs/
 # customer/reference material (reljio, rivada, telesat, papers) — not for git
 references/
 .ipynb_checkpoints/
+.venv-sandbox/
+uv.lock.bak
