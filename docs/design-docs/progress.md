@@ -1,6 +1,43 @@
 # NGSO SLS Toolkit — Progress & Next Steps
 
-## Last Updated: 2026-07-13 (Slice E intent-facade scaffolded: revived read-only NetOps over Store INTENT)
+## Last Updated: 2026-08-14 (NBI stubs vendored; GFS wildcard mirror; raw-Store port-forward path)
+
+### Slice E — raw Store access path (`StorageEntityStore`, no platform deploy needed)
+- Engdoc-verified: all storage backends serve `minkowski.proto.Store` gRPC on port 9999;
+  `kubectl port-forward svc/storage -n <ns> 9999:9999` + plaintext gRPC is the blessed
+  dev pattern (`nbictl`/`storectl` do exactly this; storectl even supervises the forward).
+- Vendored `proto_internal/storage/storage.proto` + 90-proto closure (regen script now
+  computes closures dynamically: `tools/regen_spacetime_stubs.sh`, replaces regen_nbi_stubs).
+  New `HAS_STORAGE` probe; side-effect: `HAS_NMTS` now also True offline (real nmts.proto
+  in the closure).
+- `StorageEntityStore` implements the read-only EntityStore protocol over `Store.Get/
+  GetEntities` (INTENT/NMTS_ENTITY/NMTS_RELATIONSHIP; CEL rejected — internal filter only).
+  Verified with an in-process gRPC Store server (real wire round-trip, 4 tests).
+- Auth boundary = kubectl access (dev/ops path); intentfe facade remains the key-authed
+  product path. Future: same surface reads SCHEDULE / BEAM_CANDIDATE_SEGMENT /
+  PROPAGATION_VECTOR_SEGMENT for Slices B/C.
+- Suite: **138 tests green** in the local venv.
+
+### Slice E — NBI NetOps Python stubs (unblocks Colab intent queries without the pip rebuild)
+- Generated `nbi_pb2`/`nbi_pb2_grpc` + 32-proto transitive closure from `minkowski`
+  @ `nbi-intent-facade` via grpcio-tools → `vendor/spacetime_api_stubs/` (66 modules,
+  git-tracked so Colab's clone gets them; regen: `tools/regen_spacetime_stubs.sh`).
+- `_deps.py` NBI probe now tries pip root then bazel/vendored root (`api.nbi.v1alpha`);
+  official pip package wins automatically once rebuilt. Verified `EntityType.INTENT=6`,
+  `Entity.intent` oneof, real request/response round-trip through `list_intents`.
+- `05_slice_e_pull.ipynb` install cell inserts the vendored root + reprobes.
+- Still platform-env-blocked: bazel test/build, image push, deploy override,
+  AuthorizationConfig, live smoke (see `slice-e-intent-facade.md`).
+
+### Weather static ingestion (Options 1+2 executed; see `references/weather-static-ingestion-options.md`)
+- **Option 2 shipped:** `tools/gfs-wildcard-mirror/mirror.py` — stdlib-only wildcard GFS
+  mirror honoring the weather-server contract (idx GET→200; ranged GRIB GET→206; 404
+  fallthrough); static-forever (wildcard pair) + bounded-interval (exact per-cycle trees
+  win) modes; 8 contract tests. Runbook in the tool's README (fixture prep incl. wgrib2
+  subsetting + idx regeneration, `--gfs` pointing, deployment notes).
+- **Option 1 documented** in the same runbook (historical replay via AWS NODD archive —
+  zero build). Option 3 (`StaticSource` in-tree) remains the durable follow-up, not started.
+- Suite: **134 tests green** in the local venv.
 
 ### Slice E — key-authed intent ingest (intent facade)
 - Root-caused: raw intents live only in the internal Store; no public key-authed endpoint serves
