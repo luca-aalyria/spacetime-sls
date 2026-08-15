@@ -185,3 +185,78 @@ class GrpcEntityStore:
             sset = set(states)
             intents = [i for i in intents if getattr(i, "state", None) in sset]
         return intents
+
+
+class StorageEntityStore:
+    """READ-ONLY EntityStore over the raw internal Store (`minkowski.proto.Store`, port 9999).
+
+    Access path (engdoc "Storage Services"): the storage backend serves plaintext gRPC
+    in-cluster; reach it with `kubectl port-forward svc/<storage-svc> -n <ns> 9999:9999`
+    (or storectl's supervised forward) and point this store at localhost:9999. The security
+    boundary is cluster access (kubectl credentials), NOT this channel — there is no key auth
+    on the raw Store, which is why this is a dev/ops path; the key-authed product path stays
+    the NetOps intent facade.
+
+    Compared to the facade this reads EVERY dataset (intents, NMTS, link reports, schedules,
+    beam-candidate/propagation-vector segments) with the full EntityFilter — but requires
+    kubectl access wherever the notebook runs (local Jupyter yes; Colab only with cluster
+    creds in the runtime). Read-only: only Get/GetEntities are wired; Write/Listen are not.
+    """
+    def __init__(self, target: str = "localhost:9999"):
+        _deps.require("HAS_STORAGE", "proto_internal.storage (vendored stubs)")
+        if _deps.grpc is None:
+            raise StoreError.connection("grpcio is not installed")
+        self._pb = _deps.storage_pb2
+        # plaintext by design: the transport is the kubectl port-forward tunnel
+        self._channel = _deps.grpc.insecure_channel(
+            target, options=[("grpc.max_receive_message_length", 256 << 20)])
+        self._store = _deps.storage_pb2_grpc.StoreStub(self._channel)
+
+    def close(self):
+        self._channel.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def _get_entities(self, type_name: str):
+        """Stream Store.GetEntities(type, current) and return the storage Entity wrappers."""
+        pb = self._pb
+        req = pb.GetEntitiesRequest(type=pb.EntityType.Value(type_name))
+        req.current.SetInParent()                 # time_spec: current state
+        try:
+            return [part.entity for part in self._store.GetEntities(req)]
+        except Exception as e:                    # normalize; never import grpc in callers
+            raise StoreError.rpc(f"Store.GetEntities({type_name}) failed: {type(e).__name__}")
+
+    # --- EntityStore protocol (read-only) ---
+    def list_entities(self):
+        return [e.nmts_entity for e in self._get_entities("NMTS_ENTITY")
+                if e.HasField("nmts_entity")]
+
+    def list_relationships(self, cel: str | None = None):
+        if cel is not None:
+            raise StoreError.rpc("raw Store has no CEL filter; filter client-side or use the "
+                                 "Model API (list_relationships(cel=...) on GrpcEntityStore)")
+        return [e.nmts_relationship for e in self._get_entities("NMTS_RELATIONSHIP")
+                if e.HasField("nmts_relationship")]
+
+    def get_entity(self, entity_id: str):
+        pb = self._pb
+        try:
+            resp = self._store.Get(pb.GetRequest(id=entity_id,
+                                                 type=pb.EntityType.Value("NMTS_ENTITY")))
+        except Exception as e:
+            raise StoreError.rpc(f"Store.Get({entity_id}) failed: {type(e).__name__}")
+        if not resp.HasField("entity"):
+            raise StoreError.not_found(f"no NMTS_ENTITY with id {entity_id!r}")
+        return resp.entity.nmts_entity
+
+    def list_intents(self, states=None):
+        intents = [e.intent for e in self._get_entities("INTENT") if e.HasField("intent")]
+        if states is not None:
+            sset = set(states)
+            intents = [i for i in intents if getattr(i, "state", None) in sset]
+        return intents

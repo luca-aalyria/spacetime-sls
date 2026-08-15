@@ -10,9 +10,10 @@ The probes run at import AND are re-runnable via `reprobe()` — important on Co
 package is often pip-installed AFTER this module was first imported; Python does not cache failed
 imports, so a re-probe picks up a newly-installed package without a kernel restart."""
 
-HAS_AUTH = HAS_NBI = HAS_PROVISIONING = HAS_MODEL = HAS_NMTS = False
+HAS_AUTH = HAS_NBI = HAS_PROVISIONING = HAS_MODEL = HAS_NMTS = HAS_STORAGE = False
 auth = nbi_pb2 = nbi_pb2_grpc = provisioning_pb2 = provisioning_pb2_grpc = None
 model_pb2 = model_pb2_grpc = nmts_pb2 = grpc = None
+storage_pb2 = storage_pb2_grpc = None
 MODEL_ROOT = None                       # which import root resolved for Model, if any
 NMTS_ROOT = None                        # which import root resolved for NMTS, if any
 _FLAGS = {}
@@ -28,9 +29,10 @@ _NMTS_ROOTS = ("aalyria.spacetime.api.nmts.v1.proto", "aalyria.spacetime.nmts.v1
 
 def _probe():
     """(Re)attempt all optional imports and (re)set the capability flags. Safe to call repeatedly."""
-    global HAS_AUTH, HAS_NBI, HAS_PROVISIONING, HAS_MODEL, HAS_NMTS
+    global HAS_AUTH, HAS_NBI, HAS_PROVISIONING, HAS_MODEL, HAS_NMTS, HAS_STORAGE
     global auth, nbi_pb2, nbi_pb2_grpc, provisioning_pb2, provisioning_pb2_grpc
     global model_pb2, model_pb2_grpc, nmts_pb2, grpc, MODEL_ROOT, NMTS_ROOT, _FLAGS
+    global storage_pb2, storage_pb2_grpc
 
     try:
         from aalyria.spacetime.api.common import auth as _auth
@@ -38,11 +40,17 @@ def _probe():
     except Exception:
         auth, HAS_AUTH = None, False
 
-    try:
-        from aalyria.spacetime.api.nbi.v1alpha import nbi_pb2 as _n, nbi_pb2_grpc as _ng
-        nbi_pb2, nbi_pb2_grpc, HAS_NBI = _n, _ng, True
-    except Exception:
-        nbi_pb2, nbi_pb2_grpc, HAS_NBI = None, None, False
+    # NBI (NetOps): pip root first, then bazel/vendored-stub root (see vendor/spacetime_api_stubs).
+    nbi_pb2 = nbi_pb2_grpc = None
+    HAS_NBI = False
+    for _root in ("aalyria.spacetime.api.nbi.v1alpha", "api.nbi.v1alpha"):
+        try:
+            _n = __import__(_root + ".nbi_pb2", fromlist=["nbi_pb2"])
+            _ng = __import__(_root + ".nbi_pb2_grpc", fromlist=["nbi_pb2_grpc"])
+            nbi_pb2, nbi_pb2_grpc, HAS_NBI = _n, _ng, True
+            break
+        except Exception:
+            continue
 
     try:
         from aalyria.spacetime.api.provisioning.v1alpha import (
@@ -72,6 +80,14 @@ def _probe():
         except Exception:
             continue
 
+    # Raw internal Store (engdoc: "Storage Service, port 9999") — vendored-stub-only surface;
+    # never shipped in the pip package. Reachable via kubectl port-forward, plaintext gRPC.
+    try:
+        from proto_internal.storage import storage_pb2 as _s, storage_pb2_grpc as _sg
+        storage_pb2, storage_pb2_grpc, HAS_STORAGE = _s, _sg, True
+    except Exception:
+        storage_pb2, storage_pb2_grpc, HAS_STORAGE = None, None, False
+
     try:
         import grpc as _grpc
         grpc = _grpc
@@ -79,7 +95,7 @@ def _probe():
         grpc = None
 
     _FLAGS = {"HAS_AUTH": HAS_AUTH, "HAS_NBI": HAS_NBI, "HAS_PROVISIONING": HAS_PROVISIONING,
-              "HAS_MODEL": HAS_MODEL, "HAS_NMTS": HAS_NMTS}
+              "HAS_MODEL": HAS_MODEL, "HAS_NMTS": HAS_NMTS, "HAS_STORAGE": HAS_STORAGE}
     return dict(_FLAGS)
 
 

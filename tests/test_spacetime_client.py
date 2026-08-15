@@ -118,3 +118,32 @@ def test_stub_parity_reads_only_and_never_mutates():
     assert names == ["ListEntities", "ListRelationships"]
     # no mutating verb was ever called
     assert not any(v in n for n in names for v in ("Create", "Update", "Delete", "Upsert"))
+
+
+def test_list_intents_with_real_vendored_stubs():
+    # Upgrade of the hand-double test: with vendor/spacetime_api_stubs on sys.path the whole
+    # request/response path uses REAL generated messages (proto2 oneof, real INTENT=6 enum).
+    from ngso_sls.spacetime import _deps
+    if not _deps.HAS_NBI:
+        pytest.skip("vendored NBI stubs not on sys.path")
+    pb = _deps.nbi_pb2
+
+    captured = {}
+    class _NetOps:
+        def ListEntities(self, req):
+            captured["req"] = req
+            resp = pb.ListEntitiesResponse()
+            e = resp.entities.add()
+            e.id = "intent-001"
+            e.intent.SetInParent()                    # real oneof arm
+            resp.entities.add(id="not-an-intent")     # oneof unset -> filtered by HasField
+            return resp
+
+    store = GrpcEntityStore.__new__(GrpcEntityStore)  # bypass __init__ (no channel)
+    store._model = None
+    store._nbi = _NetOps()
+    store._nbi_pb2 = pb
+    intents = store.list_intents()
+    assert isinstance(captured["req"], pb.ListEntitiesRequest)
+    assert captured["req"].type == pb.EntityType.Value("INTENT") == 6
+    assert len(intents) == 1                          # HasField filtering on the real proto

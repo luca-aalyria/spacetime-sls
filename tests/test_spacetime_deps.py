@@ -1,12 +1,16 @@
 import pytest
 
 
-def test_import_succeeds_in_sandbox_and_flags_false():
+def test_import_succeeds_in_sandbox_and_flags_consistent():
     import ngso_sls
     import ngso_sls.spacetime as st
-    # spacetime-api is absent in the sandbox -> every surface flag is False
-    assert st.HAS_AUTH is False and st.HAS_NBI is False and st.HAS_MODEL is False
-    assert st.HAS_PROVISIONING is False and st.HAS_NMTS is False
+    # The spacetime-api pip package is absent in the sandbox -> pip-only surfaces are False.
+    # HAS_NBI / HAS_STORAGE / HAS_NMTS may be True: vendor/spacetime_api_stubs provides
+    # locally-generated stubs (bazel-layout roots api.nbi.v1alpha, proto_internal.storage,
+    # nmts.v1.proto) when wired onto sys.path.
+    assert st.HAS_AUTH is False and st.HAS_MODEL is False
+    assert st.HAS_PROVISIONING is False
+    assert isinstance(st.HAS_NBI, bool) and isinstance(st.HAS_STORAGE, bool)
 
 
 def test_require_raises_clear_error_when_absent():
@@ -31,8 +35,25 @@ def test_spacetime_subpackage_not_in_core_purity_scope_but_core_still_pure():
     assert True
 
 
-def test_reprobe_returns_flags_dict_all_false_in_sandbox():
+def test_reprobe_returns_flags_dict():
     import ngso_sls.spacetime as st
     flags = st.reprobe()
-    assert set(flags) == {"HAS_AUTH", "HAS_NBI", "HAS_PROVISIONING", "HAS_MODEL", "HAS_NMTS"}
-    assert all(v is False for v in flags.values())   # no spacetime-api in the sandbox
+    assert set(flags) == {"HAS_AUTH", "HAS_NBI", "HAS_PROVISIONING", "HAS_MODEL", "HAS_NMTS",
+                          "HAS_STORAGE"}
+    # pip-only surfaces stay False in the sandbox; HAS_NBI flips True iff the vendored
+    # stubs (vendor/spacetime_api_stubs) are on sys.path.
+    assert flags["HAS_AUTH"] is False and flags["HAS_MODEL"] is False
+
+
+def test_nbi_stubs_when_vendored():
+    # With vendor/spacetime_api_stubs on sys.path (venv .pth / Colab sys.path.insert),
+    # the NetOps surface is fully usable offline: real generated messages, real enum values.
+    from ngso_sls.spacetime import _deps
+    if not _deps.HAS_NBI:
+        pytest.skip("vendored NBI stubs not on sys.path")
+    pb = _deps.nbi_pb2
+    assert pb.EntityType.Value("INTENT") == 6      # matches storage EntityType.INTENT
+    ent = pb.Entity(id="x")
+    ent.intent.SetInParent()
+    assert ent.WhichOneof("value") == "intent"
+    assert hasattr(_deps.nbi_pb2_grpc, "NetOpsStub")

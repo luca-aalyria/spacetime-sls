@@ -2,6 +2,28 @@
 
 **Goal:** programmatic, **robot-key-authed** ingest of solver-written **intents** into the SLS.
 
+## Alternative access path — raw Store over kubectl port-forward (works TODAY, no deploy)
+
+Engdoc-documented ("Storage Services": every storage backend serves `minkowski.proto.Store`
+gRPC on **port 9999**; `nbictl`/`storectl` use `kubectl port-forward` + plaintext gRPC —
+the same pattern applies to `svc/storage` directly):
+
+```
+kubectl --context=<ctx> port-forward svc/storage -n <ns> 9999:9999
+# then: StorageEntityStore("localhost:9999").list_intents()
+```
+
+SLS side is implemented: `StorageEntityStore` (`ngso_sls/spacetime/client.py`) over vendored
+`proto_internal.storage` stubs (`HAS_STORAGE`); read-only (only `Get`/`GetEntities` wired);
+4 in-process gRPC wire tests. Reads `INTENT=6`, `NMTS_ENTITY=17`, `NMTS_RELATIONSHIP=18` —
+and can later read link reports / schedules / beam-candidate + propagation-vector segments
+(Slice B/C inputs) with the full internal `EntityFilter` (intent time filters included).
+
+**Trade-off vs the facade:** auth boundary is kubectl/cluster access, not robot keys — a
+dev/ops path, fine for local Jupyter or a Colab runtime holding cluster creds, unusable for
+key-only robots. The facade remains the product path; this unblocks intent ingest while the
+facade's platform-env steps (below) are pending.
+
 ## Why a facade is required
 Raw intents live only in the internal `Store` (`EntityType.INTENT=6`). No current public,
 key-authed endpoint serves them:
@@ -94,9 +116,11 @@ grpcurl -H "authorization: Bearer <robot-JWT>" nbi-v1alpha.fss01-demo.spacetime.
 ```
 
 ## Open items / caveats
-- **Python client dependency:** the SLS uses the published `aalyria.spacetime.api` pip package.
-  `nbi_pb2`/`nbi_pb2_grpc` (NetOps) reappear only after the api package is rebuilt from the
-  revived proto. Until then `HAS_NBI=False` and `list_intents` raises clearly.
+- **Python client dependency — RESOLVED (2026-08-14) via vendored stubs:** locally-generated
+  `nbi_pb2`/`nbi_pb2_grpc` (+33-proto closure) live in `vendor/spacetime_api_stubs/`
+  (bazel-layout root `api.nbi.v1alpha`; regen via `tools/regen_spacetime_stubs.sh`). `_deps.py`
+  probes the pip root first, so the rebuilt official package supersedes them automatically.
+  The official api pip rebuild is still wanted for the long term.
 - **Bootstrap-mode fail-open:** if the instance's `AuthorizationConfig` is empty, the permission
   layer treats it as bootstrap and may permit all — exposing intents un-gated. Deploy precondition:
   run the permissions service with a populated `file` config (or `readonly`). The facade is no
