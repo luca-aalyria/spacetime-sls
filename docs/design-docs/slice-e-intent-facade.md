@@ -116,6 +116,16 @@ grpcurl -H "authorization: Bearer <robot-JWT>" nbi-v1alpha.fss01-demo.spacetime.
 ```
 
 ## Open items / caveats
+- **Rebase drift (found 2026-08-15, minkowski main pulled +326 commits):** upstream removed
+  `resources.ComputedMotion` (motion_evaluation.proto) and the Store's
+  `EntityType.COMPUTED_MOTION=13` / `Entity.computed_motion=16` (now reserved; replaced by
+  internal `ComputedMotionSegment=76`). The branch's restored `nbi.proto` imports
+  motion_evaluation.proto and carries a `computed_motion` oneof arm → **rebasing
+  `nbi-intent-facade` onto main requires dropping that arm** (reserve its field number,
+  mirroring upstream). No other facade file is affected. SLS read paths
+  (INTENT=6 / NMTS_ENTITY=17 / NMTS_RELATIONSHIP=18, intent state/time fields,
+  directional_link.platform_id/rx_platforms) verified unchanged on new main; vendored stubs
+  left as-is (matched to the deployed fss01-demo version; 140 tests + live sanity green).
 - **Python client dependency — RESOLVED (2026-08-14) via vendored stubs:** locally-generated
   `nbi_pb2`/`nbi_pb2_grpc` (+33-proto closure) live in `vendor/spacetime_api_stubs/`
   (bazel-layout root `api.nbi.v1alpha`; regen via `tools/regen_spacetime_stubs.sh`). `_deps.py`

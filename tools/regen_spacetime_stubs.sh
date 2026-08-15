@@ -28,7 +28,10 @@ def deps(path):
     if path in seen or path.startswith(("google/", "validate/")):
         return                                   # externals come from installed packages
     if not os.path.exists(path):
-        sys.exit(f"missing proto: {path}")
+        sys.exit(f"missing proto: {path}\n"
+                 "(api/nbi/v1alpha/nbi.proto exists only on the nbi-intent-facade branch — "
+                 "check it out, or rebase it onto main first; note the rebase must drop the "
+                 "computed_motion oneof arm, removed upstream with EntityType.COMPUTED_MOTION)")
     seen.add(path)
     for line in open(path):
         m = re.match(r'\s*import\s+(?:public\s+)?"([^"]+)"', line)
