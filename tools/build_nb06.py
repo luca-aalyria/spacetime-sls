@@ -26,23 +26,34 @@ port-forward) with automatic fallback to the textproto dump at `/workspace/fss01
 """)
 
 code("""# === Setup & load (live store, dump fallback) ===
-import sys, collections, datetime
-for p in ("/workspace/spacetime-sls", "/workspace/spacetime-sls/vendor/spacetime_api_stubs"):
+# Portable: repo root is resolved relative to this notebook, so this runs unmodified in the
+# sandbox, on a laptop clone, or in Colab. Override the data source with env vars:
+#   SLS_STORE_TARGET  (default localhost:9999 — needs `kubectl port-forward svc/storage 9999`)
+#   SLS_DUMP_DIR      (default <repo>/../fss01-demo-dump, then /workspace/fss01-demo-dump)
+import os, sys, collections, datetime, pathlib
+_REPO = pathlib.Path.cwd().resolve()
+while _REPO != _REPO.parent and not (_REPO / "ngso_sls").is_dir():
+    _REPO = _REPO.parent
+for p in (str(_REPO), str(_REPO / "vendor" / "spacetime_api_stubs")):
     if p not in sys.path:
         sys.path.insert(0, p)
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-DUMP_DIR = "/workspace/fss01-demo-dump"
+TARGET = os.environ.get("SLS_STORE_TARGET", "localhost:9999")
+DUMP_DIR = os.environ.get("SLS_DUMP_DIR") or next(
+    (str(d) for d in (_REPO.parent / "fss01-demo-dump",
+                      pathlib.Path("/workspace/fss01-demo-dump")) if d.is_dir()),
+    str(_REPO.parent / "fss01-demo-dump"))
 SOURCE = None
 try:
     from ngso_sls.spacetime.client import StorageEntityStore
-    _store = StorageEntityStore("localhost:9999")
+    _store = StorageEntityStore(TARGET)
     raw_intents = _store.list_intents()                     # resources.Intent protos
     plat_views  = [e for e in _store.list_entities() if e.kind == 11]   # ek_platform
     rels        = _store.list_relationships()
-    SOURCE = "live localhost:9999"
+    SOURCE = f"live {TARGET}"
 except Exception as exc:
     print(f"live store unavailable ({type(exc).__name__}) -> loading dump")
     import glob
