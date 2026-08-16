@@ -46,3 +46,17 @@ def test_builder_feeds_live_explorer_and_rerun_tracks_widgets(tmp_path, monkeypa
     b.planes1.value = 6                       # tweak constellation; NO explorer rebuild
     ex.run()
     assert ex.last_result["_total_sats"] == 30
+
+
+def test_constellation_source_walker_and_spacetime_modes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from ngso_sls.explorer import ConstellationSource
+    src = ConstellationSource()
+    elems, pu, label = src.elements()                 # Walker default preset
+    assert elems.shape[0] == 1600 and "1600" in label
+    src.mode.value = "Spacetime (live NMTS)"
+    try:                                              # live iff a forward is up; dump otherwise
+        elems, pu, label = src.elements()
+    except RuntimeError:
+        pytest.skip("no live store and no dump in this environment")
+    assert elems.shape[0] > 0 and ("live" in label or "dump" in label)

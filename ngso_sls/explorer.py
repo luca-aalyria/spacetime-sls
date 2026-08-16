@@ -396,6 +396,107 @@ class WalkerConstellationBuilder:
         display(self.panel)
 
 
+
+def _pull_spacetime_elements(target="localhost:9999", dump_dir=None):
+    """Pull the constellation from a live Store (textproto-dump fallback) and return
+    (elems, plane_uid, label, model_min_elev_deg). Spacetime imports are LAZY so the core
+    explorer module stays proto-free unless this source is actually used."""
+    import os
+    from .spacetime.nmts_adapter import platforms_to_elements
+    EK_ANTENNA = 40
+    try:
+        from .spacetime.client import StorageEntityStore
+        with StorageEntityStore(target) as store:
+            entities = store.list_entities()
+            rels = store.list_relationships()
+        label = f"live {target}"
+    except Exception as live_exc:
+        import glob, pathlib
+        from google.protobuf import text_format
+        from .spacetime import _deps
+        from .spacetime.client import _NmtsEntityView
+        dump = dump_dir or os.environ.get("SLS_DUMP_DIR") or next(
+            (str(d) for d in (pathlib.Path("/workspace/fss01-demo-dump"),)
+             if d.is_dir()), None)
+        if not dump or _deps.storage_pb2 is None:
+            raise RuntimeError(f"live pull failed ({live_exc}) and no dump available "
+                               f"(set SLS_DUMP_DIR)") from live_exc
+        def _load(pattern):
+            out = []
+            for path in sorted(glob.glob(f"{dump}/{pattern}")):
+                box = _deps.storage_pb2.TxtpbEntities()
+                with open(path) as f:
+                    text_format.Parse(f.read(), box)
+                out.extend(box.entity)
+            return out
+        entities = [_NmtsEntityView(e.nmts_entity) for e in _load("nmts/entities_ek_*.txtpb")]
+        rels = [e.nmts_relationship for e in _load("nmts/relationships_rk_contains.txtpb")]
+        label = f"dump {dump}"
+    built = platforms_to_elements(entities, rels)
+    if built["elems"].shape[0] == 0:
+        raise RuntimeError(f"no Keplerian platforms in {label} (skipped: {len(built['skipped'])})")
+    angles = [e.antenna.field_of_regard.conic.outer_half_angle_deg
+              for e in entities if getattr(e, "kind", -1) == EK_ANTENNA
+              and str(e.id).startswith("user-terminal")
+              and e.antenna.HasField("field_of_regard")]
+    min_elev = (90.0 - float(np.median(angles))) if angles else None
+    return built["elems"], built["plane_uid"], label, min_elev
+
+
+class ConstellationSource:
+    """Constellation step for the merged explorer notebook: Walker presets/custom OR a live
+    Spacetime NMTS pull (with textproto-dump fallback). `elements` matches the
+    LiveCoverageExplorer source contract: Walker values are re-read at every Run; the
+    Spacetime pull is cached until 'Pull' is pressed again."""
+
+    def __init__(self, target="localhost:9999", dump_dir=None):
+        self.walker = WalkerConstellationBuilder()
+        self.mode = w.ToggleButtons(options=["Walker (presets/custom)", "Spacetime (live NMTS)"],
+                                    value="Walker (presets/custom)", description="Source")
+        self.target = w.Text(value=target, description="Store target",
+                             style={"description_width": "130px"}, layout=w.Layout(width="330px"))
+        self.pull_btn = w.Button(description="Pull from Spacetime", icon="download")
+        self.pull_status = w.HTML("<i>not pulled yet — Pull, or first Run pulls automatically</i>")
+        self.pull_btn.on_click(self._pull)
+        self._pulled = None
+        self.model_min_elev = None
+        self._dump_dir = dump_dir
+        self.panel = w.VBox([
+            _lbl("Constellation source (analysis cell re-reads this at every Run)"),
+            self.mode,
+            self.walker.panel,
+            _lbl("Spacetime (used when Source = live NMTS; falls back to a local dump)"),
+            w.HBox([self.target, self.pull_btn]),
+            self.pull_status,
+        ])
+
+    def _pull(self, _=None):
+        self.pull_status.value = "⏳ pulling…"
+        try:
+            elems, pu, label, min_elev = _pull_spacetime_elements(self.target.value, self._dump_dir)
+            self._pulled = (elems, pu, label)
+            self.model_min_elev = min_elev
+            hint = (f"; model min-elev (user links): {min_elev:g}° — set the slider to match"
+                    if min_elev is not None else "")
+            self.pull_status.value = (f"✅ {label}: {elems.shape[0]} sats, "
+                                      f"{len(np.unique(pu))} planes{hint}")
+        except Exception as e:
+            self._pulled = None
+            self.pull_status.value = f"❌ {type(e).__name__}: {str(e)[:160]}"
+
+    def elements(self):
+        if self.mode.value.startswith("Walker"):
+            return self.walker.elements()
+        if self._pulled is None:
+            self._pull()
+        if self._pulled is None:
+            raise RuntimeError("Spacetime pull failed — see the constellation panel status")
+        return self._pulled
+
+    def display(self):
+        display(self.panel)
+
+
 class LiveCoverageExplorer(CoverageExplorer):
     """Notebook-01's Coverage Explorer with the constellation FIXED to externally supplied
     element arrays (e.g. pulled from a live Spacetime NMTS model). The constellation-shape

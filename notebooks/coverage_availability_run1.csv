@@ -13,8 +13,10 @@
 # epoch_utc: 2026-01-01T00:00:00+00:00
 # propagator: KeplerJ2
 # seed: 0
+# constellation_source: builder (re-read at Run)
+# n_sats: 1600
 # total_sats: 1600
-# shape: 1200/40/1 @48°/650km; 400/20/7 @70°/650km
+# shape: Full 1600 (dual shell): 1600 sats / 60 planes @53.5°/650km
 # min_elev_deg: 25.0
 cell_id,lat,lon,availability
 0,26.05511666922556,84.2696191088536,1.0
