@@ -18,12 +18,13 @@ import os
 import traceback
 
 import matplotlib.pyplot as plt
+import numpy as np
 import ipywidgets as w
 from IPython.display import display, clear_output
 
 from .presets import JIO_SCENARIOS
 from .config import Shell, Constellation, TimeGrid, SimConfig
-from .pipeline import run_coverage_h3
+from .pipeline import run_coverage_h3, run_coverage_h3_elements
 from .grids.aor import AORS
 from .viz.plots import (
     plot_coverage_hexmap,
@@ -150,27 +151,30 @@ class CoverageExplorer:
         return Constellation(tuple(replace(s, min_elev_user_deg=self.min_elev.value)
                                    for s in JIO_SCENARIOS[self.scenario.value].shells))
 
+    def _terrain(self):
+        """Optional per-cell horizon-mask callable from the terrain widgets (None = off)."""
+        if not self.terrain_on.value:
+            return None
+        from .grids.aor import aor_bbox
+        from .terrain import cell_horizon_masks, fetch_dem_erddap, horizon_mask_from_dem
+        bbox = aor_bbox(AORS[self.aor.value])
+        dem = None
+        if self.terrain_source.value.startswith("ETOPO"):
+            try:
+                dem = fetch_dem_erddap(bbox)   # real DEM (Colab has internet)
+            except Exception:
+                dem = None                     # fall back to the offline demo ridge
+        if dem is not None:
+            return lambda clat, clon, d=dem: horizon_mask_from_dem(  # noqa: E731
+                *d, clat, clon, n_bins=36, radius_km=400)
+        return lambda clat, clon: cell_horizon_masks(clat, clon, bbox)  # noqa: E731
+
     def compute(self, progress=None) -> dict:
         cons = self.build_constellation()
         sim = SimConfig(cons,
                         TimeGrid(_EPOCH, duration_s=self.duration_min.value * 60.0, step_s=self.step_s.value),
                         k_coverage=self.k_cov.value)
-        terrain = None
-        if self.terrain_on.value:
-            from .grids.aor import aor_bbox
-            from .terrain import cell_horizon_masks, fetch_dem_erddap, horizon_mask_from_dem
-            bbox = aor_bbox(AORS[self.aor.value])
-            dem = None
-            if self.terrain_source.value.startswith("ETOPO"):
-                try:
-                    dem = fetch_dem_erddap(bbox)   # real DEM (Colab has internet)
-                except Exception:
-                    dem = None                     # fall back to the offline demo ridge
-            if dem is not None:
-                terrain = lambda clat, clon, d=dem: horizon_mask_from_dem(  # noqa: E731
-                    *d, clat, clon, n_bins=36, radius_km=400)
-            else:
-                terrain = lambda clat, clon: cell_horizon_masks(clat, clon, bbox)  # noqa: E731
+        terrain = self._terrain()
         overlap = self.overlap_s.value if self.handover_gate.value else None
         res = run_coverage_h3(sim, AORS[self.aor.value], cell_res=self.cell_res.value,
                               shard_res=(1 if self.use_shard.value else None), chunk_steps=10,
@@ -324,6 +328,77 @@ class CoverageExplorer:
         """Show controls + results together and run once (single-cell convenience)."""
         display(self.controls, self.results)
         self.run()
+
+
+
+class LiveCoverageExplorer(CoverageExplorer):
+    """Notebook-01's Coverage Explorer with the constellation FIXED to externally supplied
+    element arrays (e.g. pulled from a live Spacetime NMTS model). The constellation-shape
+    controls are removed; every analysis control (service area, min elev, H3 res, duration,
+    step, k, sharding, make-before-break gate, terrain, opacity) and the run-tab/CSV
+    machinery are inherited unchanged."""
+
+    def __init__(self, elems, plane_uid, label="live NMTS constellation",
+                 csv_path="live_coverage_availability.csv", min_elev_deg=None):
+        self._elems = np.asarray(elems, dtype=float)
+        self._plane_uid = np.asarray(plane_uid)
+        self._label = label
+        super().__init__(csv_path=csv_path)
+        # the scenario widget only feeds run-log text here (compute() ignores it)
+        self.scenario = w.Dropdown(options=[label], value=label, description="Scenario")
+        if min_elev_deg is not None:
+            self.min_elev.value = float(min_elev_deg)
+
+    def _build_layout(self):
+        super()._build_layout()
+        n_planes = len(np.unique(self._plane_uid))
+        self.controls = w.VBox([
+            _lbl(f"Constellation (fixed, from NMTS): {self._label} — "
+                 f"{self._elems.shape[0]} sats, {n_planes} planes"),
+            _lbl("Service area"),
+            w.HBox([self.aor]),
+            _lbl("Analysis  (k = min # satellites in view for a cell to count as covered)"),
+            w.HBox([self.min_elev, self.cell_res]),
+            w.HBox([self.duration_min, self.step_s]),
+            w.HBox([self.k_cov, self.use_shard]),
+            _lbl("Handover continuity (k=1 make-before-break: continuous single coverage "
+                 "+ a ≥ overlap 2-sat window at every handover)"),
+            w.HBox([self.handover_gate, self.overlap_s]),
+            w.HBox([self.require_diff_plane]),
+            w.HBox([self.hex_alpha, self.terrain_on]),
+            w.HBox([self.terrain_source]),
+            self.run_btn,
+            w.HBox([self.progress, self.status]),
+        ])
+
+    def compute(self, progress=None) -> dict:
+        tg = TimeGrid(_EPOCH, duration_s=self.duration_min.value * 60.0,
+                      step_s=self.step_s.value)
+        overlap = self.overlap_s.value if self.handover_gate.value else None
+        res = run_coverage_h3_elements(
+            self._elems, self._plane_uid, self.min_elev.value, tg, AORS[self.aor.value],
+            cell_res=self.cell_res.value, shard_res=(1 if self.use_shard.value else None),
+            chunk_steps=10, progress=progress, terrain=self._terrain(),
+            continuity_overlap_s=overlap,
+            require_different_plane=self.require_diff_plane.value,
+            k_values=[self.k_cov.value], default_k=self.k_cov.value)
+        alt_km = float((self._elems[:, 0] * (1 + self._elems[:, 1])).mean()) - 6378.137
+        inc = float(np.degrees(self._elems[:, 2]).mean())
+        res["_total_sats"] = int(self._elems.shape[0])
+        res["_shape"] = (f"{self._label}: {res['_total_sats']} sats / "
+                         f"{len(np.unique(self._plane_uid))} planes "
+                         f"@{inc:.1f}°/{alt_km:.0f}km (NMTS)")
+        res["_params"] = self._params()
+        return res
+
+    def _params(self) -> dict:
+        p = super()._params()
+        p["scenario"] = self._label
+        p["constellation_source"] = "live NMTS (fixed)"
+        p["n_sats"] = int(self._elems.shape[0])
+        for key in ("shell1", "shell2"):
+            p.pop(key, None)
+        return p
 
 
 class MinSatSweep:

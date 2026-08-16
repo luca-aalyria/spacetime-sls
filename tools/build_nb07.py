@@ -135,146 +135,38 @@ print(f"model-derived min elevation: user links {MODEL_MIN_ELEV_UT} deg, "
       f"feeder links {MODEL_MIN_ELEV_GW} deg")
 """)
 
-code("""# === Controls (notebook-01 style; constellation shape comes from NMTS, all else here) ===
-from datetime import datetime, timezone
-from ngso_sls.grids.aor import AORS       # Global / India / CONUS / Europe
+md("""## Coverage Explorer — notebook-01 controls, live constellation
 
-RUN_GLOBAL   = True                        #@param {type:"boolean"}
-GLOBAL_RES   = 2                           #@param {type:"integer"}  (H3: 2=~87k km2 cells)
-REGION       = "India"                     #@param ["India","CONUS","Europe","Global"]
-REGION_RES   = 3                           #@param {type:"integer"}  (3=~12k km2 cells)
+Identical GUI to notebook 01 (service area, min elevation, H3 resolution, duration/step,
+**k**, sharding, make-before-break gate, terrain, opacity) — only the constellation
+section is gone: the shape above is **fixed from the live NMTS model**. Min elevation is
+pre-set from the model's antenna field-of-regard (change the slider to override).
 
-# k-coverage: grades to COMPUTE (curves/CSV) + the headline k the MAPS show.
-K_VALUES     = (1, 2, 3)                   #@param — nb01 'k values' multi-select
-K_HEADLINE   = 2                           #@param — nb01 'k (min sats in view)' slider
-TARGET_AVAILABILITY = 0.99                 #@param {type:"number"} — threshold line + %cells
-
-MIN_ELEV     = MODEL_MIN_ELEV_UT or 25.0   # from the model; set a number to override
-ELEV_SWEEP   = (10.0, MIN_ELEV, 40.0)      # regional elevation-mask sensitivity
-
-# k=1 make-before-break continuity gate (nb01 'handover gate'):
-MBB_GATE     = False                       #@param {type:"boolean"}
-MBB_OVERLAP_S = 20.0                       #@param {type:"number"} min 2-sat overlap
-REQUIRE_DIFFERENT_PLANE = False            #@param {type:"boolean"}
-
-EPOCH_UTC    = datetime(2026, 1, 1, tzinfo=timezone.utc)
-DURATION_S   = 3600.0                      #@param {type:"number"}
-STEP_S       = 60.0                        #@param {type:"number"}
-SHARD_RES    = 1
-CHUNK_STEPS  = 10
-HEX_ALPHA    = 0.8
-
-assert K_HEADLINE in K_VALUES, "K_HEADLINE must be one of K_VALUES"
-_overlap = MBB_OVERLAP_S if MBB_GATE else None
-print(f"analysis: global={RUN_GLOBAL}@res{GLOBAL_RES}, region={REGION}@res{REGION_RES}, "
-      f"min_elev={MIN_ELEV:.0f} deg (model), k_values={K_VALUES} (maps @ k={K_HEADLINE}), "
-      f"target={TARGET_AVAILABILITY:.0%}, mbb={'on' if MBB_GATE else 'off'}, "
-      f"{DURATION_S:.0f}s @ {STEP_S:.0f}s")
+Each **Run simulation** appends a results tab (availability map, sats-in-view map, MBB
+feasibility, latitude profile, histogram) and writes a self-describing CSV — previous runs
+are kept for comparison, so probe k grades by re-running with different **k** values.
+*(The tabs are live widgets: run the notebook in Jupyter/Colab to see them — they don't
+render in static HTML exports.)*
 """)
 
-code("""# === Global coverage run ===
-from ngso_sls.pipeline import run_coverage_h3_elements
-from ngso_sls.config import TimeGrid
+code("""# === Coverage Explorer (controls) ===
+from ngso_sls.explorer import LiveCoverageExplorer
 
-def _cover(aor, res_h3, min_elev):
-    return run_coverage_h3_elements(
-        elems, plane_uid, float(min_elev), tg, aor, cell_res=res_h3,
-        shard_res=SHARD_RES, chunk_steps=CHUNK_STEPS, k_values=list(K_VALUES),
-        default_k=K_HEADLINE, continuity_overlap_s=_overlap,
-        require_different_plane=REQUIRE_DIFFERENT_PLANE)
-
-def _k_report(res, label):
-    for k in K_VALUES:
-        av = res["availability_by_k"][k]
-        print(f"  {label} k={k}: mean avail {av.mean():.3f} | "
-              f"cells >= {TARGET_AVAILABILITY:.0%}: {float((av >= TARGET_AVAILABILITY).mean()):.1%}")
-
-tg = TimeGrid(EPOCH_UTC, duration_s=DURATION_S, step_s=STEP_S)
-res_global = None
-if RUN_GLOBAL:
-    res_global = _cover(AORS["Global"], GLOBAL_RES, MIN_ELEV)
-    print(f"Global grid: {len(res_global['cells'])} cells (maps @ k={K_HEADLINE})")
-    _k_report(res_global, "global")
-else:
-    print("RUN_GLOBAL=False — skipping")
+explorer = LiveCoverageExplorer(
+    elems, plane_uid,
+    label=SOURCE,
+    csv_path="live_coverage_availability.csv",
+    min_elev_deg=MODEL_MIN_ELEV_UT)           # model-derived; slider overrides
+explorer.display()
 """)
 
-code("""# === Global maps & latitude profile (maps show k = K_HEADLINE) ===
-from ngso_sls.viz.plots import (plot_availability_map, plot_sats_in_view_hexmap,
-                                plot_sats_in_view_vs_latitude, plot_availability_hist,
-                                plot_mbb_feasible_hexmap)
-if res_global is not None:
-    plot_availability_map(res_global, title=f"Global availability @ k={K_HEADLINE}, "
-                          f"min_elev {MIN_ELEV:.0f} deg"); plt.show()
-    plot_sats_in_view_hexmap(res_global); plt.show()
-    plot_sats_in_view_vs_latitude(res_global); plt.show()
-    if MBB_GATE:
-        plot_mbb_feasible_hexmap(res_global); plt.show()
+code("""# === Results (each run appends a tab) ===
+from IPython.display import display
+display(explorer.results)
 """)
 
-code("""# === Availability curves & distribution — ALL requested k grades ===
-def plot_k_curves(res, label):
-    fig, ax = plt.subplots(figsize=(9, 4.5))
-    for k in K_VALUES:
-        av = np.sort(res["availability_by_k"][k])[::-1]
-        ax.plot(np.linspace(0, 100, len(av)), av * 100, label=f"k={k}")
-    ax.axhline(TARGET_AVAILABILITY * 100, color="gray", ls="--", lw=1,
-               label=f"target {TARGET_AVAILABILITY:.0%}")
-    ax.set_xlabel(f"% of {label} cells (sorted best-first)")
-    ax.set_ylabel("availability [%]")
-    ax.set_title(f"{label}: availability by coverage grade k (min_elev {MIN_ELEV:.0f} deg)")
-    ax.legend(); ax.grid(alpha=0.3)
-    plt.tight_layout(); plt.show()
-
-if res_global is not None:
-    plot_k_curves(res_global, "Global")
-    plot_availability_hist(res_global); plt.show()   # distribution @ k=K_HEADLINE
-""")
-
-code("""# === Regional zoom + min-elevation sweep (all k grades) ===
-from ngso_sls.viz.plots import plot_coverage_hexmap
-sweep = {}
-for elev in ELEV_SWEEP:
-    sweep[elev] = _cover(AORS[REGION], REGION_RES, elev)
-res_region = sweep[MIN_ELEV] if MIN_ELEV in sweep else list(sweep.values())[0]
-
-plot_coverage_hexmap(res_region, title=f"{REGION} availability @ k={K_HEADLINE}, min_elev "
-                     f"{MIN_ELEV:.0f} deg (model-derived)", alpha=HEX_ALPHA); plt.show()
-if MBB_GATE:
-    plot_mbb_feasible_hexmap(res_region, alpha=HEX_ALPHA); plt.show()
-plot_k_curves(res_region, REGION)
-
-fig, ax = plt.subplots(figsize=(9, 4.5))
-for k in K_VALUES:
-    means = [sweep[e]["availability_by_k"][k].mean() for e in ELEV_SWEEP]
-    ax.plot(list(ELEV_SWEEP), [m * 100 for m in means], "-o", ms=5, label=f"k={k}")
-ax.axhline(TARGET_AVAILABILITY * 100, color="gray", ls="--", lw=1,
-           label=f"target {TARGET_AVAILABILITY:.0%}")
-ax.set_xlabel("min elevation mask [deg]"); ax.set_ylabel(f"mean {REGION} availability [%]")
-ax.set_title(f"{REGION} (res {REGION_RES}, {len(res_region['cells'])} cells) — "
-             "elevation sensitivity by coverage grade")
-ax.legend(); ax.grid(alpha=0.3); plt.tight_layout(); plt.show()
-
-for elev in ELEV_SWEEP:
-    print(f"min_elev {elev:4.0f} deg:")
-    _k_report(sweep[elev], REGION)
-""")
-
-code("""# === CSV export (CSV-out convention) ===
-from ngso_sls.io.csv_io import write_availability_csv, write_elements_csv
-out_dir = _REPO / "outputs"; out_dir.mkdir(exist_ok=True)
-manifest = {"source": SOURCE, "epoch_utc": str(EPOCH_UTC), "min_elev_deg": MIN_ELEV,
-            "duration_s": DURATION_S, "step_s": STEP_S, "n_sats": int(elems.shape[0]),
-            "k_values": list(K_VALUES), "default_k": K_HEADLINE,
-            "target_availability": TARGET_AVAILABILITY,
-            "mbb_overlap_s": _overlap, "require_different_plane": REQUIRE_DIFFERENT_PLANE,
-            "snapshot_utc": datetime.now(timezone.utc).isoformat()}
-if res_global is not None:
-    write_availability_csv(res_global, out_dir / "live_global_availability.csv", manifest)
-write_availability_csv(res_region, out_dir / f"live_{REGION.lower()}_availability.csv", manifest)
-write_elements_csv(elems, [m["sat_id"] for m in built["meta"]],
-                   out_dir / "live_constellation_elements.csv", manifest)
-print("wrote:", *[p.name for p in out_dir.glob('live_*.csv')])
+code("""# === Auto-run once with the current settings (so Run-All produces a result) ===
+explorer.run()
 """)
 
 md("""**Reading the results** — this is the Slice-A analysis of notebook 01, but the
