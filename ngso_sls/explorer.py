@@ -217,9 +217,11 @@ class CoverageExplorer:
             clear_output(wait=True)
             try:
                 fig = make_fig()
-                plt.show()
                 if fig is not None:
-                    plt.close(fig)          # keep the rendered image; free the figure handle
+                    display(fig)            # explicit display: plt.show() inside Output
+                    plt.close(fig)          # widgets renders blank on some frontends
+                else:
+                    plt.show()
             except Exception:
                 traceback.print_exc()
 
@@ -298,6 +300,11 @@ class CoverageExplorer:
                 print("Enable the 'k=1 make-before-break gate' control to compute handover feasibility.")
         self._draw(o_lat, lambda: plot_sats_in_view_vs_latitude(res))
         self._draw(o_hist, lambda: plot_availability_hist(res))
+        if hasattr(self, "_elems"):          # Live explorer: record the constellation used
+            o_cons = w.Output(layout=box)
+            inner.children = (*inner.children, o_cons)
+            inner.set_title(len(inner.children) - 1, "Constellation")
+            self._draw(o_cons, self._constellation_fig)
         params = res["_params"]
         hdr = w.HTML(f"<b>Run {n}</b> — {res['_total_sats']} sats · {res['_shape']}<br>"
                      f"<span style='font-size:90%;color:#555'>"
@@ -329,9 +336,8 @@ class CoverageExplorer:
             self.runs_tab.selected_index = min(i, len(kids) - 1)
 
     def display(self):
-        """Show controls + results together and run once (single-cell convenience)."""
+        """Show controls + results together (no auto-run — press 'Run simulation')."""
         display(self.controls, self.results)
-        self.run()
 
 
 
@@ -569,6 +575,18 @@ class LiveCoverageExplorer(CoverageExplorer):
                          f"@{inc:.1f}°/{alt_km:.0f}km")
         res["_params"] = self._params()
         return res
+
+    def _constellation_fig(self):
+        """Lattice + altitude snapshot of the elements THIS run used (source re-read at Run)."""
+        e, pu = self._elems, self._plane_uid
+        fig, ax = plt.subplots(1, 2, figsize=(11, 3.6))
+        ax[0].scatter(np.degrees(e[:, 3]), np.degrees(e[:, 5]), c=pu, cmap="tab20", s=12)
+        ax[0].set_xlabel("RAAN [deg]"); ax[0].set_ylabel("mean anomaly [deg]")
+        ax[0].set_title(f"{self._label}: {e.shape[0]} sats, {len(np.unique(pu))} planes")
+        ax[1].hist(e[:, 0] * (1 + e[:, 1]) - 6378.137, bins=20)
+        ax[1].set_xlabel("apoapsis altitude [km]"); ax[1].set_title("Altitude distribution")
+        plt.tight_layout()
+        return fig
 
     def _params(self) -> dict:
         p = super()._params()
