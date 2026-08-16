@@ -238,7 +238,11 @@ class CoverageExplorer:
             with self.out_log:
                 clear_output(wait=True)
                 print("Running simulation…")
-                res = self.compute(progress=_progress)
+            # NOTE: compute() runs OUTSIDE the Output context on purpose — ipywidgets'
+            # Output.__exit__ renders AND SWALLOWS exceptions, which previously let run()
+            # fall through to the panel code with `res` unbound.
+            res = self.compute(progress=_progress)
+            with self.out_log:
                 self.last_result = res
                 a = res["availability"]
                 params = res["_params"]
@@ -262,10 +266,10 @@ class CoverageExplorer:
                                  f"availability mean {a.mean():.3f}, mean sats-in-view "
                                  f"{res['sats_in_view_mean'].mean():.1f}")
             self.progress.bar_style = "success"
-        except Exception:
+        except Exception as e:
             with self.out_log:
                 traceback.print_exc()
-            self.status.value = "❌ error — see Run log"
+            self.status.value = f"❌ {type(e).__name__}: {str(e)[:140]}"
             self.progress.bar_style = "danger"
         finally:
             self.run_btn.disabled = False
@@ -519,7 +523,9 @@ class MinSatSweep:
                 print(f"Sweeping {len(incs)} inclination(s) x {n_spp} sizes over {self.aor.value} "
                       f"({self.planes.value} planes @ {self.altitude.value:g}km, k={list(ks)})…")
                 print("Parameters: " + ", ".join(f"{k}={v}" for k, v in self._params().items()))
-                mode, res, incs = self.compute(progress=_progress)
+            # outside the Output context: Output.__exit__ swallows exceptions (see run() above)
+            mode, res, incs = self.compute(progress=_progress)
+            with self.out_log:
                 self.last_result, self.last_mode = res, mode
                 if mode == "coverage_vs_N":
                     for r in res["sweep"]:
@@ -573,10 +579,10 @@ class MinSatSweep:
             self._append_sweep_panel(mode, res, n)
             self.status.value = "✅ done"
             self.progress.bar_style = "success"
-        except Exception:
+        except Exception as e:
             with self.out_log:
                 traceback.print_exc()
-            self.status.value = "❌ error — see Sweep log"
+            self.status.value = f"❌ {type(e).__name__}: {str(e)[:140]}"
             self.progress.bar_style = "danger"
         finally:
             self.run_btn.disabled = False
