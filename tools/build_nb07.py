@@ -133,7 +133,7 @@ print(f"model-derived min elevation: user links {MODEL_MIN_ELEV_UT} deg, "
       f"feeder links {MODEL_MIN_ELEV_GW} deg")
 """)
 
-code("""# === Controls (notebook-01 style) ===
+code("""# === Controls (notebook-01 style; constellation shape comes from NMTS, all else here) ===
 from datetime import datetime, timezone
 from ngso_sls.grids.aor import AORS       # Global / India / CONUS / Europe
 
@@ -141,15 +141,32 @@ RUN_GLOBAL   = True                        #@param {type:"boolean"}
 GLOBAL_RES   = 2                           #@param {type:"integer"}  (H3: 2=~87k km2 cells)
 REGION       = "India"                     #@param ["India","CONUS","Europe","Global"]
 REGION_RES   = 3                           #@param {type:"integer"}  (3=~12k km2 cells)
-MIN_ELEV     = MODEL_MIN_ELEV_UT or 25.0   # from the model; override with a number if needed
+
+# k-coverage: grades to COMPUTE (curves/CSV) + the headline k the MAPS show.
+K_VALUES     = (1, 2, 3)                   #@param — nb01 'k values' multi-select
+K_HEADLINE   = 2                           #@param — nb01 'k (min sats in view)' slider
+TARGET_AVAILABILITY = 0.99                 #@param {type:"number"} — threshold line + %cells
+
+MIN_ELEV     = MODEL_MIN_ELEV_UT or 25.0   # from the model; set a number to override
 ELEV_SWEEP   = (10.0, MIN_ELEV, 40.0)      # regional elevation-mask sensitivity
+
+# k=1 make-before-break continuity gate (nb01 'handover gate'):
+MBB_GATE     = False                       #@param {type:"boolean"}
+MBB_OVERLAP_S = 20.0                       #@param {type:"number"} min 2-sat overlap
+REQUIRE_DIFFERENT_PLANE = False            #@param {type:"boolean"}
+
 EPOCH_UTC    = datetime(2026, 1, 1, tzinfo=timezone.utc)
 DURATION_S   = 3600.0                      #@param {type:"number"}
 STEP_S       = 60.0                        #@param {type:"number"}
-K_VALUES     = (1, 2)                      # k-coverage grades
+SHARD_RES    = 1
+CHUNK_STEPS  = 10
+HEX_ALPHA    = 0.8
 
+assert K_HEADLINE in K_VALUES, "K_HEADLINE must be one of K_VALUES"
+_overlap = MBB_OVERLAP_S if MBB_GATE else None
 print(f"analysis: global={RUN_GLOBAL}@res{GLOBAL_RES}, region={REGION}@res{REGION_RES}, "
-      f"min_elev={MIN_ELEV:.0f} deg (model), sweep={ELEV_SWEEP}, "
+      f"min_elev={MIN_ELEV:.0f} deg (model), k_values={K_VALUES} (maps @ k={K_HEADLINE}), "
+      f"target={TARGET_AVAILABILITY:.0%}, mbb={'on' if MBB_GATE else 'off'}, "
       f"{DURATION_S:.0f}s @ {STEP_S:.0f}s")
 """)
 
@@ -157,57 +174,88 @@ code("""# === Global coverage run ===
 from ngso_sls.pipeline import run_coverage_h3_elements
 from ngso_sls.config import TimeGrid
 
+def _cover(aor, res_h3, min_elev):
+    return run_coverage_h3_elements(
+        elems, plane_uid, float(min_elev), tg, aor, cell_res=res_h3,
+        shard_res=SHARD_RES, chunk_steps=CHUNK_STEPS, k_values=list(K_VALUES),
+        default_k=K_HEADLINE, continuity_overlap_s=_overlap,
+        require_different_plane=REQUIRE_DIFFERENT_PLANE)
+
+def _k_report(res, label):
+    for k in K_VALUES:
+        av = res["availability_by_k"][k]
+        print(f"  {label} k={k}: mean avail {av.mean():.3f} | "
+              f"cells >= {TARGET_AVAILABILITY:.0%}: {float((av >= TARGET_AVAILABILITY).mean()):.1%}")
+
 tg = TimeGrid(EPOCH_UTC, duration_s=DURATION_S, step_s=STEP_S)
 res_global = None
 if RUN_GLOBAL:
-    res_global = run_coverage_h3_elements(
-        elems, plane_uid, MIN_ELEV, tg, AORS["Global"], cell_res=GLOBAL_RES,
-        shard_res=1, chunk_steps=10, k_values=list(K_VALUES))
-    av = res_global["availability_by_k"][1]
-    print(f"Global grid: {len(res_global['cells'])} cells | k=1 availability "
-          f"mean={av.mean():.3f}, fully-covered cells={float((av >= 1.0).mean()):.1%}")
+    res_global = _cover(AORS["Global"], GLOBAL_RES, MIN_ELEV)
+    print(f"Global grid: {len(res_global['cells'])} cells (maps @ k={K_HEADLINE})")
+    _k_report(res_global, "global")
 else:
     print("RUN_GLOBAL=False — skipping")
 """)
 
-code("""# === Global maps & latitude profile ===
+code("""# === Global maps & latitude profile (maps show k = K_HEADLINE) ===
 from ngso_sls.viz.plots import (plot_availability_map, plot_sats_in_view_hexmap,
-                                plot_sats_in_view_vs_latitude, plot_availability,
-                                plot_availability_hist)
+                                plot_sats_in_view_vs_latitude, plot_availability_hist,
+                                plot_mbb_feasible_hexmap)
 if res_global is not None:
-    plot_availability_map(res_global); plt.show()
+    plot_availability_map(res_global, title=f"Global availability @ k={K_HEADLINE}, "
+                          f"min_elev {MIN_ELEV:.0f} deg"); plt.show()
     plot_sats_in_view_hexmap(res_global); plt.show()
     plot_sats_in_view_vs_latitude(res_global); plt.show()
+    if MBB_GATE:
+        plot_mbb_feasible_hexmap(res_global); plt.show()
 """)
 
-code("""# === Availability curves & distribution (k=1,2) ===
+code("""# === Availability curves & distribution — ALL requested k grades ===
+def plot_k_curves(res, label):
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    for k in K_VALUES:
+        av = np.sort(res["availability_by_k"][k])[::-1]
+        ax.plot(np.linspace(0, 100, len(av)), av * 100, label=f"k={k}")
+    ax.axhline(TARGET_AVAILABILITY * 100, color="gray", ls="--", lw=1,
+               label=f"target {TARGET_AVAILABILITY:.0%}")
+    ax.set_xlabel(f"% of {label} cells (sorted best-first)")
+    ax.set_ylabel("availability [%]")
+    ax.set_title(f"{label}: availability by coverage grade k (min_elev {MIN_ELEV:.0f} deg)")
+    ax.legend(); ax.grid(alpha=0.3)
+    plt.tight_layout(); plt.show()
+
 if res_global is not None:
-    plot_availability(res_global); plt.show()
-    plot_availability_hist(res_global); plt.show()
+    plot_k_curves(res_global, "Global")
+    plot_availability_hist(res_global); plt.show()   # distribution @ k=K_HEADLINE
 """)
 
-code("""# === Regional zoom + min-elevation sweep (controls-driven) ===
+code("""# === Regional zoom + min-elevation sweep (all k grades) ===
 from ngso_sls.viz.plots import plot_coverage_hexmap
 sweep = {}
 for elev in ELEV_SWEEP:
-    sweep[elev] = run_coverage_h3_elements(
-        elems, plane_uid, float(elev), tg, AORS[REGION], cell_res=REGION_RES,
-        shard_res=1, chunk_steps=10, k_values=list(K_VALUES))
+    sweep[elev] = _cover(AORS[REGION], REGION_RES, elev)
 res_region = sweep[MIN_ELEV] if MIN_ELEV in sweep else list(sweep.values())[0]
-plot_coverage_hexmap(res_region, title=f"{REGION} k=1 availability @ min_elev "
-                     f"{MIN_ELEV:.0f} deg (model-derived)"); plt.show()
 
-fig, ax = plt.subplots(figsize=(8, 4))
-for elev, r in sweep.items():
-    av = np.sort(r["availability_by_k"][1])[::-1]
-    ax.plot(np.linspace(0, 100, len(av)), av * 100, label=f"min elev {elev:.0f} deg")
-ax.set_xlabel(f"% of {REGION} cells (sorted)"); ax.set_ylabel("k=1 availability [%]")
+plot_coverage_hexmap(res_region, title=f"{REGION} availability @ k={K_HEADLINE}, min_elev "
+                     f"{MIN_ELEV:.0f} deg (model-derived)", alpha=HEX_ALPHA); plt.show()
+if MBB_GATE:
+    plot_mbb_feasible_hexmap(res_region, alpha=HEX_ALPHA); plt.show()
+plot_k_curves(res_region, REGION)
+
+fig, ax = plt.subplots(figsize=(9, 4.5))
+for k in K_VALUES:
+    means = [sweep[e]["availability_by_k"][k].mean() for e in ELEV_SWEEP]
+    ax.plot(list(ELEV_SWEEP), [m * 100 for m in means], "-o", ms=5, label=f"k={k}")
+ax.axhline(TARGET_AVAILABILITY * 100, color="gray", ls="--", lw=1,
+           label=f"target {TARGET_AVAILABILITY:.0%}")
+ax.set_xlabel("min elevation mask [deg]"); ax.set_ylabel(f"mean {REGION} availability [%]")
 ax.set_title(f"{REGION} (res {REGION_RES}, {len(res_region['cells'])} cells) — "
-             "elevation-mask sensitivity, live constellation"); ax.legend(); ax.grid(alpha=0.3)
-plt.tight_layout(); plt.show()
-for elev, r in sweep.items():
-    print(f"  min_elev {elev:4.0f} deg -> mean k=1 availability "
-          f"{r['availability_by_k'][1].mean():.3f}")
+             "elevation sensitivity by coverage grade")
+ax.legend(); ax.grid(alpha=0.3); plt.tight_layout(); plt.show()
+
+for elev in ELEV_SWEEP:
+    print(f"min_elev {elev:4.0f} deg:")
+    _k_report(sweep[elev], REGION)
 """)
 
 code("""# === CSV export (CSV-out convention) ===
@@ -215,6 +263,9 @@ from ngso_sls.io.csv_io import write_availability_csv, write_elements_csv
 out_dir = _REPO / "outputs"; out_dir.mkdir(exist_ok=True)
 manifest = {"source": SOURCE, "epoch_utc": str(EPOCH_UTC), "min_elev_deg": MIN_ELEV,
             "duration_s": DURATION_S, "step_s": STEP_S, "n_sats": int(elems.shape[0]),
+            "k_values": list(K_VALUES), "default_k": K_HEADLINE,
+            "target_availability": TARGET_AVAILABILITY,
+            "mbb_overlap_s": _overlap, "require_different_plane": REQUIRE_DIFFERENT_PLANE,
             "snapshot_utc": datetime.now(timezone.utc).isoformat()}
 if res_global is not None:
     write_availability_csv(res_global, out_dir / "live_global_availability.csv", manifest)
