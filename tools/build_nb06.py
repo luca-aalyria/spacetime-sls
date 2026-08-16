@@ -72,7 +72,9 @@ try:
     rels        = _store.list_relationships()
     SOURCE = f"live {TARGET}"
 except Exception as exc:
-    print(f"live store unavailable ({type(exc).__name__}) -> loading dump")
+    print(f"live store unavailable -> loading dump\\n  cause: {exc}\\n"
+          "  (live needs a kubectl port-forward to svc/storage:9999 running on THIS machine"
+          " — sandbox/host each need their own; see tools/sandbox_live_setup.sh)")
     import glob
     from google.protobuf import text_format
     from ngso_sls.spacetime import _deps

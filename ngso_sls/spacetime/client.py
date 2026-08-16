@@ -204,6 +204,19 @@ def _filter_intent_states(intents, states):
     return [i for i in intents if _intent_state_name(i) in sset]
 
 
+def _grpc_detail(e) -> str:
+    """Compact diagnostic for a normalized gRPC failure. UNAVAILABLE almost always means
+    nothing is listening on the target — i.e. the kubectl port-forward is not running on
+    THIS machine (each machine needs its own; a sandbox/host forward is not shared)."""
+    try:
+        code = e.code().name           # grpc.RpcError
+    except Exception:
+        return type(e).__name__
+    hint = " (no listener on target — is the port-forward running on this machine?)" \
+        if code == "UNAVAILABLE" else ""
+    return f"{type(e).__name__}[{code}]{hint}"
+
+
 class _NmtsEntityView:
     """Adapter-compatible view of a raw nmts.v1.Entity. The adapter (built for the Model API
     shape) expects `kind` as an int and the payload under a bare name (`.platform`); the raw
@@ -265,7 +278,7 @@ class StorageEntityStore:
         try:
             return [part.entity for part in self._store.GetEntities(req)]
         except Exception as e:                    # normalize; never import grpc in callers
-            raise StoreError.rpc(f"Store.GetEntities({type_name}) failed: {type(e).__name__}")
+            raise StoreError.rpc(f"Store.GetEntities({type_name}) failed: {_grpc_detail(e)}")
 
     # --- EntityStore protocol (read-only) ---
     def list_entities(self):
@@ -285,7 +298,7 @@ class StorageEntityStore:
             resp = self._store.Get(pb.GetRequest(id=entity_id,
                                                  type=pb.EntityType.Value("NMTS_ENTITY")))
         except Exception as e:
-            raise StoreError.rpc(f"Store.Get({entity_id}) failed: {type(e).__name__}")
+            raise StoreError.rpc(f"Store.Get({entity_id}) failed: {_grpc_detail(e)}")
         if not resp.HasField("entity"):
             raise StoreError.not_found(f"no NMTS_ENTITY with id {entity_id!r}")
         return _NmtsEntityView(resp.entity.nmts_entity)
