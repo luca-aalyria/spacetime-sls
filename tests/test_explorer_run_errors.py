@@ -29,3 +29,20 @@ def test_live_explorer_run_good_path(tmp_path, monkeypatch):
     lx.run()
     assert lx.status.value.startswith("✅")
     assert os.path.exists("live_coverage_availability_run1.csv")
+
+
+def test_builder_feeds_live_explorer_and_rerun_tracks_widgets(tmp_path, monkeypatch):
+    # nb01's new two-cell flow: WalkerConstellationBuilder.elements (a callable) feeds the
+    # SAME LiveCoverageExplorer used by nb07; every Run re-reads the builder's widgets.
+    monkeypatch.chdir(tmp_path)
+    from ngso_sls.explorer import WalkerConstellationBuilder
+    b = WalkerConstellationBuilder()
+    b.scenario.value = "Custom (Walker)"
+    b.planes1.value, b.spp1.value = 4, 5
+    ex = LiveCoverageExplorer(b.elements, csv_path="cov.csv")
+    ex.duration_min.value = 10
+    ex.run()
+    assert ex.status.value.startswith("✅") and ex.last_result["_total_sats"] == 20
+    b.planes1.value = 6                       # tweak constellation; NO explorer rebuild
+    ex.run()
+    assert ex.last_result["_total_sats"] == 30

@@ -23,7 +23,7 @@ import ipywidgets as w
 from IPython.display import display, clear_output
 
 from .presets import JIO_SCENARIOS
-from .config import Shell, Constellation, TimeGrid, SimConfig
+from .config import Shell, Constellation, TimeGrid, SimConfig, constellation_model
 from .pipeline import run_coverage_h3, run_coverage_h3_elements
 from .grids.aor import AORS
 from .viz.plots import (
@@ -85,7 +85,7 @@ class CoverageExplorer:
         self.min_elev = w.FloatSlider(value=25, min=5, max=45, step=1, description="Min elev deg", style=s, layout=L)
         self.cell_res = w.IntSlider(value=3, min=1, max=5, description="H3 resolution", style=s, layout=L)
         self.duration_min = w.FloatSlider(value=60, min=10, max=240, step=10, description="Duration min", style=s, layout=L)
-        self.step_s = w.FloatSlider(value=60, min=10, max=120, step=10, description="Time step s", style=s, layout=L)
+        self.step_s = w.FloatSlider(value=60, min=1, max=120, step=1, description="Time step s", style=s, layout=L)
         self.k_cov = w.IntSlider(value=2, min=1, max=30, description="k (min sats in view)",
                                  style=wide, layout=w.Layout(width="360px"))
         self.use_shard = w.Checkbox(value=True, description="Use sharding (faster, identical result)")
@@ -335,6 +335,67 @@ class CoverageExplorer:
 
 
 
+
+class WalkerConstellationBuilder:
+    """The constellation section of notebook 01 as a standalone panel. `elements()` reads
+    the CURRENT widget values and returns (elems, plane_uid, label) — the same shape the
+    live-NMTS pull produces — so the analysis cell can be the same LiveCoverageExplorer in
+    both notebooks. No build button: pass `builder.elements` (the callable) to the explorer
+    and every Run picks up the latest slider values."""
+
+    def __init__(self):
+        st = {"description_width": "130px"}
+        L = w.Layout(width="330px")
+        self.scenario = w.Dropdown(options=list(JIO_SCENARIOS) + ["Custom (Walker)"],
+                                   value="Full 1600 (dual shell)", description="Scenario",
+                                   style=st, layout=L)
+        self.planes1 = w.IntSlider(value=40, min=1, max=60, description="S1 planes", style=st, layout=L)
+        self.spp1 = w.IntSlider(value=30, min=1, max=40, description="S1 sats/plane", style=st, layout=L)
+        self.phase1 = w.IntSlider(value=1, min=0, max=59, description="S1 phasing F", style=st, layout=L)
+        self.alt1 = w.FloatSlider(value=650, min=300, max=1500, step=10, description="S1 altitude km", style=st, layout=L)
+        self.inc1 = w.FloatSlider(value=48, min=0, max=90, step=1, description="S1 inclination", style=st, layout=L)
+        self.shell2_on = w.Checkbox(value=False, description="Add second shell")
+        self.planes2 = w.IntSlider(value=20, min=1, max=60, description="S2 planes", style=st, layout=L)
+        self.spp2 = w.IntSlider(value=20, min=1, max=40, description="S2 sats/plane", style=st, layout=L)
+        self.phase2 = w.IntSlider(value=7, min=0, max=59, description="S2 phasing F", style=st, layout=L)
+        self.alt2 = w.FloatSlider(value=650, min=300, max=1500, step=10, description="S2 altitude km", style=st, layout=L)
+        self.inc2 = w.FloatSlider(value=70, min=0, max=90, step=1, description="S2 inclination", style=st, layout=L)
+        self.panel = w.VBox([
+            _lbl("Constellation (used by the analysis cell below at every Run)"),
+            w.HBox([self.scenario]),
+            _lbl("Custom Walker (used only when Scenario = 'Custom (Walker)')"),
+            w.HBox([self.planes1, self.spp1, self.phase1]),
+            w.HBox([self.alt1, self.inc1]),
+            self.shell2_on,
+            w.HBox([self.planes2, self.spp2, self.phase2]),
+            w.HBox([self.alt2, self.inc2]),
+        ])
+
+    def constellation(self) -> Constellation:
+        if self.scenario.value == "Custom (Walker)":
+            shells = [Shell("s1", self.planes1.value * self.spp1.value, self.planes1.value,
+                            min(self.phase1.value, self.planes1.value - 1), self.alt1.value,
+                            self.inc1.value, min_elev_user_deg=25.0)]
+            if self.shell2_on.value:
+                shells.append(Shell("s2", self.planes2.value * self.spp2.value, self.planes2.value,
+                                    min(self.phase2.value, self.planes2.value - 1), self.alt2.value,
+                                    self.inc2.value, min_elev_user_deg=25.0))
+            return Constellation(tuple(shells))
+        return Constellation(JIO_SCENARIOS[self.scenario.value].shells)
+
+    def elements(self):
+        """(elems, plane_uid, label) from the current widget values."""
+        cons = self.constellation()
+        model = constellation_model(cons)
+        label = self.scenario.value if self.scenario.value != "Custom (Walker)" else \
+            "; ".join(f"{sh.walker_T}/{sh.walker_P}/{sh.walker_F} "
+                      f"@{sh.inclination_deg:g}°/{sh.altitude_km:g}km" for sh in cons.shells)
+        return model.elems, model.plane_uid, label
+
+    def display(self):
+        display(self.panel)
+
+
 class LiveCoverageExplorer(CoverageExplorer):
     """Notebook-01's Coverage Explorer with the constellation FIXED to externally supplied
     element arrays (e.g. pulled from a live Spacetime NMTS model). The constellation-shape
@@ -342,10 +403,16 @@ class LiveCoverageExplorer(CoverageExplorer):
     step, k, sharding, make-before-break gate, terrain, opacity) and the run-tab/CSV
     machinery are inherited unchanged."""
 
-    def __init__(self, elems, plane_uid, label="live NMTS constellation",
+    def __init__(self, elems, plane_uid=None, label="live NMTS constellation",
                  csv_path="live_coverage_availability.csv", min_elev_deg=None):
-        self._elems = np.asarray(elems, dtype=float)
-        self._plane_uid = np.asarray(plane_uid)
+        if callable(elems):                     # elements source (e.g. builder.elements):
+            self._source = elems                # re-evaluated at every Run
+            e, pu, label = elems()
+        else:
+            self._source = None
+            e, pu = elems, plane_uid
+        self._elems = np.asarray(e, dtype=float)
+        self._plane_uid = np.asarray(pu)
         self._label = label
         super().__init__(csv_path=csv_path)
         # the scenario widget only feeds run-log text here (compute() ignores it)
@@ -376,6 +443,13 @@ class LiveCoverageExplorer(CoverageExplorer):
         ])
 
     def compute(self, progress=None) -> dict:
+        if self._source is not None:            # refresh from the builder's current widgets
+            e, pu, label = self._source()
+            self._elems = np.asarray(e, dtype=float)
+            self._plane_uid = np.asarray(pu)
+            self._label = label
+            self.scenario.options = [label]
+            self.scenario.value = label
         tg = TimeGrid(_EPOCH, duration_s=self.duration_min.value * 60.0,
                       step_s=self.step_s.value)
         overlap = self.overlap_s.value if self.handover_gate.value else None
@@ -391,14 +465,15 @@ class LiveCoverageExplorer(CoverageExplorer):
         res["_total_sats"] = int(self._elems.shape[0])
         res["_shape"] = (f"{self._label}: {res['_total_sats']} sats / "
                          f"{len(np.unique(self._plane_uid))} planes "
-                         f"@{inc:.1f}°/{alt_km:.0f}km (NMTS)")
+                         f"@{inc:.1f}°/{alt_km:.0f}km")
         res["_params"] = self._params()
         return res
 
     def _params(self) -> dict:
         p = super()._params()
         p["scenario"] = self._label
-        p["constellation_source"] = "live NMTS (fixed)"
+        p["constellation_source"] = ("builder (re-read at Run)" if self._source
+                                     else "external elements (e.g. live NMTS)")
         p["n_sats"] = int(self._elems.shape[0])
         for key in ("shell1", "shell2"):
             p.pop(key, None)
@@ -433,7 +508,7 @@ class MinSatSweep:
         self.area_grade = w.FloatSlider(value=0.95, min=0.5, max=1.0, step=0.01, description="Area grade", style=s, layout=L)
         self.cell_res = w.IntSlider(value=3, min=1, max=5, description="H3 resolution", style=s, layout=L)
         self.duration_min = w.FloatSlider(value=30, min=10, max=240, step=10, description="Duration min", style=s, layout=L)
-        self.step_s = w.FloatSlider(value=60, min=10, max=120, step=10, description="Time step s", style=s, layout=L)
+        self.step_s = w.FloatSlider(value=60, min=1, max=120, step=1, description="Time step s", style=s, layout=L)
         self.use_shard = w.Checkbox(value=True, description="Use sharding")
         self.handover_gate = w.Checkbox(value=False, description="k=1 make-before-break gate")
         self.overlap_s = w.FloatSlider(value=20, min=0, max=180, step=5,
