@@ -1,5 +1,21 @@
 # NGSO SLS Toolkit — Progress & Next Steps
 
+## Last Updated: 2026-08-16 (notebooks 01+07 MERGED; shared analysis panel; explorer fixes)
+
+### Coverage Explorer unification (owner-directed, 2026-08-16)
+- `LiveCoverageExplorer` = nb01's GUI minus constellation section, elements-fed;
+  `WalkerConstellationBuilder` + `ConstellationSource` (Walker presets/custom OR live
+  Spacetime NMTS pull w/ dump fallback + model min-elev hint; lazy spacetime imports).
+- **nb01 is now the single Coverage Explorer** (A1 source -> A2 shared analysis); nb07
+  retired (analysis divergence eliminated). nb06 (intent analytics) unchanged.
+- Fixes: ipywidgets Output-context exception swallow in run() (UnboundLocalError on
+  compute failure), status bar now shows the real error; step slider min 10s -> 1s
+  (MBB gate usability); notebooks 01/05/06 dual-env solid (local anchor + Colab clone).
+- Env: ONE shared uv venv (/workspace-anchored, standalone cpython 3.12.14 in mount);
+  host mirror of the port-forward = same sandbox_live_setup.sh script. 144 tests green.
+
+---
+
 ## Last Updated: 2026-08-15 (live fss01-demo loop closed: dump + notebooks 05/06/07 executed live)
 
 ### Slice E — live-instance analytics (sandbox → fss01-demo via port-forward, read-only)
