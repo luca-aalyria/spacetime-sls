@@ -34,6 +34,23 @@ import os, sys, collections, datetime, pathlib
 _REPO = pathlib.Path.cwd().resolve()
 while _REPO != _REPO.parent and not (_REPO / "ngso_sls").is_dir():
     _REPO = _REPO.parent
+if not (_REPO / "ngso_sls").is_dir():                    # cwd outside a checkout:
+    _anchor = pathlib.Path("/workspace/spacetime-sls")    # sandbox/host mount anchor
+    if (_anchor / "ngso_sls").is_dir():
+        _REPO = _anchor
+if not (_REPO / "ngso_sls").is_dir():                    # bare runtime (Colab): clone + install
+    import subprocess
+    _url = "https://github.com/luca-aalyria/spacetime-sls.git"
+    try:                                                  # private repo: Colab secret GITHUB_TOKEN
+        from google.colab import userdata
+        _tok = userdata.get("GITHUB_TOKEN")
+        if _tok:
+            _url = _url.replace("https://", f"https://{_tok}@")
+    except Exception:
+        pass
+    subprocess.run(["git", "clone", "-q", _url], check=True)
+    _REPO = (pathlib.Path.cwd() / "spacetime-sls").resolve()
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", str(_REPO)], check=False)
 for p in (str(_REPO), str(_REPO / "vendor" / "spacetime_api_stubs")):
     if p not in sys.path:
         sys.path.insert(0, p)

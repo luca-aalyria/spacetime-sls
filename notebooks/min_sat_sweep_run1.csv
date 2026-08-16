@@ -1,0 +1,29 @@
+# service_area: India
+# planes: 40
+# altitude_km: 650.0
+# phasing_F: 1
+# incl_min: 48.0
+# incl_max: 48.0
+# incl_step: 5.0
+# spp_min: 5
+# spp_max: 30
+# spp_step: 5
+# k_values: [1, 2]
+# target_availability: 0.99
+# area_grade: 0.95
+# min_elev_deg: 25.0
+# h3_res: 3
+# duration_min: 30.0
+# step_s: 60.0
+# sharding: True
+# handover_gate: False
+# min_overlap_s: None
+# propagator: KeplerJ2
+# min_N_by_k: {1: 600, 2: 600}  min_N_mbb: None  target_availability: 0.99  area_grade: 0.95  inclination: 48.0
+N,planes,sats_per_plane,mean_sats_in_view,pct_k1,pct_k2,mean_avail_k1,mean_avail_k2
+200,40,5,1.484993,0.015936,0.000000,0.641301,0.489641
+400,40,10,2.968393,0.764940,0.398406,0.977689,0.915272
+600,40,15,4.452324,1.000000,1.000000,1.000000,1.000000
+800,40,20,5.939973,1.000000,1.000000,1.000000,1.000000
+1000,40,25,7.430677,1.000000,1.000000,1.000000,1.000000
+1200,40,30,8.910757,1.000000,1.000000,1.000000,1.000000
