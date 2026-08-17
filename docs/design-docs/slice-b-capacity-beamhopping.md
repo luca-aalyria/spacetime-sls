@@ -41,3 +41,22 @@ just geometric duty cycle. Placeholders to design against:
 - Demand model: uniform vs population-weighted vs traffic hotspots (ties to M7 weighting).
 - Where the oracle comparison lives: extend nb06 (live intents already parsed) vs new nb.
 - Feeder-link capacity coupling (fss01 scenario doesn't intent-manage feeder links).
+
+## Oracle protocol — Spacetime-as-simulator (owner discussion 2026-08-17)
+Everything needed is read/written through the **Store**; no service-specific query APIs.
+Link predictor and satsolver are REACTIVE: they watch the model in the Store and
+continuously write outputs back. "Querying" them = writing inputs, reading outputs:
+1. **Author** (pybuilder): UTs at H3 res-3/4 cell centers + demand map as
+   SERVICE_REQUESTs (uniform first) + constellation shape → load into a version-pinned
+   spacebox instance.
+2. **Link predictor output** (read Store): BEAM_CANDIDATE_SEGMENT=52 +
+   PROPAGATION_VECTOR_SEGMENT=63 → LoS/sats-in-view/availability per cell — the
+   solver-side twin of nb01's coverage tensor (validates Slice A cell-by-cell).
+3. **Satsolver output** (read Store): link/modem/cell intents + SCHEDULE=33 → per-cell
+   dwell/revisit (beam-hopping duty cycle) + modcod (spectral efficiency) → capacity ≡
+   the Slice B oracle. SBI is NOT needed (that's for real device agents; sim readout is
+   the Store).
+- fss01-demo dataset counts for beam-candidates/prop-vectors/schedules: UNVERIFIED (probe
+  attempted 2026-08-17; port-forward dropped mid-probe — retry). Old instances may retain
+  these only transiently (durationcache) — the diff/interval GetEntities time-specs are
+  the fallback readout.
