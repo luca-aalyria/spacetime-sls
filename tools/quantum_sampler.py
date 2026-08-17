@@ -29,7 +29,7 @@ def sample(stub, type_name, window_s, dump_timeout_s, id_prefix=None):
     req.group.add().type = pb.EntityType.Value(type_name)   # repeated: one group per type
     if id_prefix:
         rng = req.ranges.add()
-        rng.type = req.group.type
+        rng.type = req.group[0].type
         rng.begin = id_prefix
         rng.end = id_prefix + "\U0010ffff"
     stream = stub.Listen(req, timeout=dump_timeout_s + window_s + 30)
