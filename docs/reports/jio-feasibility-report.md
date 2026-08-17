@@ -1,19 +1,19 @@
 # NGSO Constellation Feasibility for Reliance Jio
 ### Coverage, Capacity and Live-System Validation with Aalyria Spacetime
 
-**Status: DRAFT** — sections marked ⏳ fill in as computation completes. Figures land in
+**Status: DRAFT** — sections marked [PENDING] fill in as computation completes. Figures land in
 `figs/` (committed with the report; regenerate via the Coverage Explorer notebook).
 
 ---
 
-## 1. Executive summary  ⏳ (finalize last)
+## 1. Executive summary  [PENDING - finalize last]
 
 - The proposed 1,600-satellite dual-shell constellation delivers **[X]% availability at
-  k=1 and [Y]% at k=2** over India at a 25° elevation mask. ⏳ M7
+  k=1 and [Y]% at k=2** over India at a 25° elevation mask. [PENDING: M7 sweep]
 - The minimum constellation meeting a **99% availability target** over India is
-  **[N] satellites ([P] planes × [S] sats/plane @ [alt] km / [inc]°)**. ⏳ M7
+  **[N] satellites ([P] planes × [S] sats/plane @ [alt] km / [inc]°)**. [PENDING: M7 sweep]
 - Delivered capacity over India with beam hopping: **[C] Gbps** aggregate,
-  **[c] Mbps** per cell median. ⏳ Slice B + oracle
+  **[c] Mbps** per cell median. [PENDING: Slice B + oracle]
 - **Every prediction in this report is validated against Aalyria Spacetime** — the same
   software that will allocate resources in the live system. Geometric coverage agreement
   with Spacetime's production link predictor: **mean Δ 0.13 %, max 3.3 %** (§5).
@@ -36,28 +36,28 @@ Two engines, one contract:
 The workflow: sweep with the SLS → validate the shortlist in Spacetime → report both,
 with deltas.
 
-## 3. Coverage: the Jio constellation over India  ⏳ M7 sweep
+## 3. Coverage: the Jio constellation over India  [PENDING: M7 sweep]
 
 - k=1 / k=2 / k=3 availability maps @ 10°/25°/40° masks — `figs/coverage_*.png`
 - Elevation-mask sensitivity by coverage grade
 - Make-before-break handover feasibility (20 s two-satellite overlap)
 - Minimum-satellite sweep: availability vs N at the 99% target; Pareto candidates
 
-## 4. Capacity with beam hopping  ⏳ Slice B
+## 4. Capacity with beam hopping  [PENDING: Slice B]
 
 - Duty-cycle model: per-beam dwell/revisit under demand maps (uniform, then
   population-weighted); capacity per cell and aggregate
 - Air-interface roadmap: DVB-S2X superframing & ACM; 5G NR NTN dwell/revisit constraints
 - Spacetime satsolver comparison on identical scenarios (legacy + current solver)
 
-## 5. Validation against the live system  ✅ (data in hand)
+## 5. Validation against the live system
 
 A live Spacetime instance (150-satellite LEO reference constellation, 10×15 @ 53°/1157 km)
 was read directly and compared point-for-point:
 
 - **Coverage agreement**: SLS engine evaluated at the link predictor's exact 222 ground
   points and 10-second time samples → k=1 availability mean Δ **−0.0013**, max |Δ|
-  **0.033**, ≥99% agreement in [Z]% of points — `figs/oracle_delta.png` ⏳ export
+  **0.033**, ≥99% agreement in [Z]% of points — `figs/oracle_delta.png` [PENDING: figure export]
 - **What the live system exposes** (all extracted programmatically, read-only):
 
 | Data | Live example (reference constellation) |
@@ -78,5 +78,5 @@ outcomes from the same data streams operations would use. Ephemeral instances sp
 minutes, are version-pinnable to any deployed release, and are driven end-to-end
 programmatically — enabling parameter sweeps where every point is a full-system answer.
 
-## Appendix A — reproducibility  ⏳
+## Appendix A — reproducibility  [PENDING]
 Scenario definitions, sweep configurations, and per-figure regeneration commands.
