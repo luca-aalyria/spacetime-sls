@@ -30,9 +30,19 @@ fi
 
 cd "$REPO"
 mkdir -p "$CACHE"
-# fetch = download all external repos for the target, no compilation.
+# fetch = download all external repos for the targets, no compilation.
 # --config release matters only for build options; deps are the same.
-"$BAZEL" fetch //spacebox --repository_cache="$CACHE"
+# Target set = everything the ephemeral-instance mission needs:
+#   //spacebox                          create/destroy/update/age CLI
+#   //spacebox/archon                   integration-test harness (serve/test)
+#   //tools/storectl                    bulk Store export/import/delete
+#   //github/tools/nbictl/cmd/nbictl    model/provisioning rsync loaders
+#   //scenarios/pybuilder/...           authoritative NMTS scenario builder
+"$BAZEL" fetch \
+  //spacebox //spacebox/archon //tools/storectl \
+  //github/tools/nbictl/cmd/nbictl:nbictl \
+  //scenarios/pybuilder/... \
+  --repository_cache="$CACHE"
 echo
 echo "Done. Cache: $CACHE ($(du -sh "$CACHE" | cut -f1))"
 echo "Sandbox can now: bazel build //spacebox --repository_cache=/workspace/.bazel-repo-cache"
