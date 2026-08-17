@@ -1,5 +1,23 @@
 # NGSO SLS Toolkit — Progress & Next Steps
 
+## Last Updated: 2026-08-17 (owner direction: real Jio answers + Spacebox integration in parallel)
+
+### Two parallel workstreams (owner-directed 2026-08-17)
+- **A. Jio answers:** (1) M7 min-N/k sweep over dual-shell ranges — Slice A machinery ready,
+  wire `workers` into sweep.py (pipeline now parallel: Global res2 689s→81s, 14 workers,
+  bit-identical test). (2) Beam hopping + real capacity allocation = **Slice B design doc**
+  (design-before-code): align with satsolver subproblems (user-link→feeder→carrier→routing→
+  beam-hopping); validate against live intents (nb06 machinery).
+- **B. Spacebox integration:** e2e-internal host cluster ACCESS VERIFIED
+  (`a5a-s7e-k8s-e2e-internal`/cluster, ADC). Next: vendor operator.proto stubs, SpaceboxOperator
+  Create/Watch/Destroy from Python; population via minkowski `scenarios/pybuilder`
+  (AUTHORITATIVE NMTS scenario builder) → `--scenario` / storectl. Gate: adversarial pass on
+  write-path policy (`slice-de-ephemeral-instances.md`).
+- Session fixes: sweep auto-run removed (nb01 v2.1.1), sweep/run PNG export, Image-widget
+  rendering, workload/ETA line, notebook versioning convention. 145 tests green.
+
+---
+
 ## Last Updated: 2026-08-16 (notebooks 01+07 MERGED; shared analysis panel; explorer fixes)
 
 ### Coverage Explorer unification (owner-directed, 2026-08-16)
