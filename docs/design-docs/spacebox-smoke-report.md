@@ -30,6 +30,25 @@ be reaped (reaping itself may also fail until the image is fixed — flag both).
 **Ask for the platform team:** roll/fix the spacebox deployment image on e2e-internal
 (helm binary missing from runfiles); confirm `Create` processes again.
 
+## CORRECTION (2026-08-17, after reviewing /workspace/spacebox-archon-guide.md)
+The in-cluster gRPC operator is NOT the documented user path — it's the CI-oriented
+service (and the currently-deployed image is the broken one). **The documented path runs
+the CLI on the WORKSTATION**, which executes helm locally with your kubeconfig — the
+broken in-cluster pod is irrelevant to it:
+```
+bazel run --config release //spacebox -- create --recreate \
+  --context e2e-internal --storage storage-sqlite --solver satsolver-nmts \
+  --domain-name internal.e2e.spacetime.aalyria.com \
+  --namespace <name> --ttl 6h --wait [--scenario <//scenarios target>]
+```
+So the near-term unblock is bazel on the host (sandbox has none): owner runs create;
+everything downstream (port-forward 9999 into the new namespace, nbictl/pybuilder data
+load, our Store readers, archon suites, destroy) is already in place. The operator-image
+fix remains worth reporting for the LONG-term goal (Python-driven parallel instance
+farms), but it is not on the critical path. Guide extras adopted: `--scenario` loads a
+//scenarios target at create; `--wait` gates on core services; `spacebox update
+--service X` redeploys one service in <1 min; `destroy`/`age` for lifecycle.
+
 ## Environment notes gathered en route
 - Port-forwards to BOTH clusters flap under sustained use (SPDY error-stream timeouts;
   self-healing after quiet periods). Long-running work should prefer in-cluster execution.
