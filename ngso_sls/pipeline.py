@@ -43,6 +43,7 @@ def run_coverage_h3(
     cell_res: int,
     shard_res: int | None = None,
     chunk_steps: int | None = None,
+    workers: int | None = None,
     propagator=None,
     progress=None,
     k_values=None,
@@ -64,7 +65,8 @@ def run_coverage_h3(
     min_elev = min(s.min_elev_user_deg for s in sim.constellation.shells)
     return run_coverage_h3_elements(
         model.elems, model.plane_uid, min_elev, sim.time_grid, aor, cell_res,
-        shard_res=shard_res, chunk_steps=chunk_steps, propagator=propagator, progress=progress,
+        shard_res=shard_res, chunk_steps=chunk_steps, workers=workers,
+        propagator=propagator, progress=progress,
         k_values=(k_values if k_values is not None else [sim.k_coverage]), terrain=terrain,
         continuity_overlap_s=continuity_overlap_s, require_different_sat=require_different_sat,
         require_different_plane=require_different_plane,
@@ -80,6 +82,7 @@ def run_coverage_h3_elements(
     cell_res: int,
     shard_res: int | None = None,
     chunk_steps: int | None = None,
+    workers: int | None = None,
     propagator=None,
     progress=None,
     k_values=None,
@@ -170,49 +173,55 @@ def run_coverage_h3_elements(
     done_shards = 0
     if progress is not None:
         progress(done_shards, total_shards)             # 0/total (optional UI callback)
-    for cidx in shards.values():
-        clat, clon = lat[cidx], lon[cidx]
-        ce, cu = cell_ecef[cidx], cell_up[cidx]
-        if shard_res is None:
-            sat_idx = np.arange(elems.shape[0])
-        else:
-            mask = relevant_sat_mask(sub_lat, sub_lon, clat, clon, dil)
-            sat_idx = np.nonzero(mask)[0]
-        if sat_idx.size:
-            if terrain is not None:
-                east_s, north_s, tmask_s = cell_east[cidx], cell_north[cidx], terrain_masks[cidx]
-                rows = np.arange(tmask_s.shape[0])[:, None, None]
-            # For continuity we retain the full per-(cell,sat) in-view time series of this shard
-            # (a cell only ever sees its shard's relevant sats — the conservative pre-filter
-            # guarantees no false negatives — so shard-local satellite identity is sufficient).
-            inview_shard = (np.zeros((len(cidx), n_time, sat_idx.size), dtype=bool)
-                            if do_mbb else None)
-            for a, b in bounds:
-                re_chunk = r_ecef[sat_idx][:, a:b, :]        # (n_sat_s, n_chunk, 3)
-                if terrain is None:
-                    elev = elevation_deg(ce, cu, re_chunk)   # (n_cellS, n_chunk, n_sat_s)
-                    in_view = elev >= min_elev
-                else:
-                    elev, az = az_el_deg(ce, east_s, north_s, cu, re_chunk)
-                    azb = np.clip((az / bin_w).astype(int), 0, n_bins - 1)
-                    eff_min = np.maximum(min_elev, tmask_s[rows, azb])   # terrain skyline
-                    in_view = elev >= eff_min
-                nv = in_view.sum(axis=-1)                    # (n_cellS, n_chunk)
-                for k in ks:
-                    serviceable[k][cidx] += (nv >= k).sum(axis=1)
-                sat_sum[cidx] += nv.sum(axis=1)
-                if do_mbb:
-                    inview_shard[:, a:b, :] = in_view
+
+    ctx = {"lat": lat, "lon": lon, "cell_ecef": cell_ecef, "cell_up": cell_up,
+           "shard_res": shard_res, "elems": elems, "sub_lat": sub_lat, "sub_lon": sub_lon,
+           "dil": dil, "terrain_on": terrain is not None, "n_time": n_time, "bounds": bounds,
+           "r_ecef": r_ecef, "min_elev": min_elev, "ks": ks, "do_mbb": do_mbb,
+           "plane_uid": plane_uid, "require_different_sat": require_different_sat,
+           "mbb_req": mbb_req if do_mbb else None,
+           "min_overlap_steps": min_overlap_steps if do_mbb else None}
+    if terrain is not None:
+        ctx.update(cell_east=cell_east, cell_north=cell_north,
+                   terrain_masks=terrain_masks, n_bins=n_bins, bin_w=bin_w)
+
+    def _apply(cidx, r):
+        if r is not None:
+            for k in ks:
+                serviceable[k][cidx] += r["serviceable"][k]
+            sat_sum[cidx] += r["sat_sum"]
             if do_mbb:
-                mbb = continuity_map(inview_shard, min_overlap_steps, require_different_sat,
-                                     plane_uid=plane_uid[sat_idx], requirement=mbb_req)
-                mbb_feasible[cidx] = mbb["mbb_feasible"]
-                mbb_worst_steps[cidx] = mbb["worst_overlap_steps"]
-                mbb_n_handovers[cidx] = mbb["n_handovers"]
-                mbb_worst_gap_steps[cidx] = mbb["worst_gap_steps"]
-        done_shards += 1
-        if progress is not None:
-            progress(done_shards, total_shards)
+                mbb_feasible[cidx] = r["mbb_feasible"]
+                mbb_worst_steps[cidx] = r["worst_overlap_steps"]
+                mbb_n_handovers[cidx] = r["n_handovers"]
+                mbb_worst_gap_steps[cidx] = r["worst_gap_steps"]
+
+    shard_list = list(shards.values())
+    n_workers = min(int(workers or 1), len(shard_list))
+    if n_workers > 1 and _FORK_OK:
+        # Shards are single-owner and embarrassingly parallel; fork shares the big read-only
+        # arrays copy-on-write. Falls back to serial where fork is unavailable.
+        import concurrent.futures as _cf
+        import multiprocessing as _mp
+        global _SHARD_CTX
+        _SHARD_CTX = ctx
+        try:
+            with _cf.ProcessPoolExecutor(max_workers=n_workers,
+                                         mp_context=_mp.get_context("fork")) as pool:
+                for cidx, r in zip(shard_list,
+                                   pool.map(_shard_task, shard_list, chunksize=1)):
+                    _apply(cidx, r)
+                    done_shards += 1
+                    if progress is not None:
+                        progress(done_shards, total_shards)
+        finally:
+            _SHARD_CTX = None
+    else:
+        for cidx in shard_list:
+            _apply(cidx, _compute_shard(ctx, cidx))
+            done_shards += 1
+            if progress is not None:
+                progress(done_shards, total_shards)
 
     availability_by_k = {k: serviceable[k] / n_time for k in ks}
     _default_k = default_k if (default_k is not None and default_k in availability_by_k) else ks[0]
@@ -236,4 +245,66 @@ def run_coverage_h3_elements(
             "detection_step_s": float(step),
             "refine_tol_s": float(refine_tol_s),
         })
+    return out
+
+
+_FORK_OK = hasattr(__import__("os"), "fork")
+_SHARD_CTX = None
+
+
+def _shard_task(cidx):
+    return _compute_shard(_SHARD_CTX, cidx)
+
+
+def _compute_shard(ctx, cidx):
+    """One shard of the coverage kernel (identical math for serial and parallel paths).
+    Returns per-shard accumulator slices, or None for an empty shard."""
+    lat, lon = ctx["lat"], ctx["lon"]
+    n_time, bounds, ks = ctx["n_time"], ctx["bounds"], ctx["ks"]
+    do_mbb = ctx["do_mbb"]
+    clat, clon = lat[cidx], lon[cidx]
+    ce, cu = ctx["cell_ecef"][cidx], ctx["cell_up"][cidx]
+    if ctx["shard_res"] is None:
+        sat_idx = np.arange(ctx["elems"].shape[0])
+    else:
+        mask = relevant_sat_mask(ctx["sub_lat"], ctx["sub_lon"], clat, clon, ctx["dil"])
+        sat_idx = np.nonzero(mask)[0]
+    if not sat_idx.size:
+        return None
+    if ctx["terrain_on"]:
+        east_s, north_s = ctx["cell_east"][cidx], ctx["cell_north"][cidx]
+        tmask_s = ctx["terrain_masks"][cidx]
+        rows = np.arange(tmask_s.shape[0])[:, None, None]
+        n_bins, bin_w = ctx["n_bins"], ctx["bin_w"]
+    # For continuity we retain the full per-(cell,sat) in-view time series of this shard
+    # (a cell only ever sees its shard's relevant sats — the conservative pre-filter
+    # guarantees no false negatives — so shard-local satellite identity is sufficient).
+    inview_shard = (np.zeros((len(cidx), n_time, sat_idx.size), dtype=bool)
+                    if do_mbb else None)
+    out = {"serviceable": {k: np.zeros(len(cidx), dtype=np.int64) for k in ks},
+           "sat_sum": np.zeros(len(cidx), dtype=np.int64)}
+    for a, b in bounds:
+        re_chunk = ctx["r_ecef"][sat_idx][:, a:b, :]         # (n_sat_s, n_chunk, 3)
+        if not ctx["terrain_on"]:
+            elev = elevation_deg(ce, cu, re_chunk)           # (n_cellS, n_chunk, n_sat_s)
+            in_view = elev >= ctx["min_elev"]
+        else:
+            elev, az = az_el_deg(ce, east_s, north_s, cu, re_chunk)
+            azb = np.clip((az / bin_w).astype(int), 0, n_bins - 1)
+            eff_min = np.maximum(ctx["min_elev"], tmask_s[rows, azb])    # terrain skyline
+            in_view = elev >= eff_min
+        nv = in_view.sum(axis=-1)                            # (n_cellS, n_chunk)
+        for k in ks:
+            out["serviceable"][k] += (nv >= k).sum(axis=1)
+        out["sat_sum"] += nv.sum(axis=1)
+        if do_mbb:
+            inview_shard[:, a:b, :] = in_view
+    if do_mbb:
+        mbb = continuity_map(inview_shard, ctx["min_overlap_steps"],
+                             ctx["require_different_sat"],
+                             plane_uid=ctx["plane_uid"][sat_idx], requirement=ctx["mbb_req"])
+        out.update(mbb_feasible=mbb["mbb_feasible"],
+                   worst_overlap_steps=mbb["worst_overlap_steps"],
+                   n_handovers=mbb["n_handovers"],
+                   worst_gap_steps=mbb["worst_gap_steps"])
     return out

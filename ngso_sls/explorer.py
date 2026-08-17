@@ -38,6 +38,11 @@ from .io.csv_io import write_availability_csv
 _EPOCH = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
+def _n_workers() -> int:
+    """Parallel shard workers: all-but-two cores (measured 8.5x on Global res2)."""
+    return max(1, (os.cpu_count() or 4) - 2)
+
+
 def _lbl(text):
     return w.HTML(f"<b>{text}</b>")
 
@@ -181,6 +186,7 @@ class CoverageExplorer:
         overlap = self.overlap_s.value if self.handover_gate.value else None
         res = run_coverage_h3(sim, AORS[self.aor.value], cell_res=self.cell_res.value,
                               shard_res=(1 if self.use_shard.value else None), chunk_steps=10,
+                              workers=(_n_workers() if self.use_shard.value else None),
                               progress=progress, terrain=terrain, continuity_overlap_s=overlap,
                               require_different_plane=self.require_diff_plane.value)
         res["_sim"] = sim
@@ -334,6 +340,17 @@ class CoverageExplorer:
             children.append(self._fig_widget(self._constellation_fig))
             titles.append("Constellation")
         inner = w.Tab(children=children)
+        base = os.path.splitext(self.csv_path)[0]
+        saved = []
+        for t, ch in zip(titles, children):
+            if isinstance(ch, w.Image):      # also save to disk for slides/reports
+                fn = f"{base}_run{n}_{t.lower().replace(' ', '_').replace('-', '_')}.png"
+                with open(fn, "wb") as fh:
+                    fh.write(ch.value)
+                saved.append(fn)
+        if saved:
+            with self.out_log:
+                print("  PNGs: " + ", ".join(saved))
         for i, t in enumerate(titles):
             inner.set_title(i, t)
         params = res["_params"]
@@ -594,7 +611,8 @@ class LiveCoverageExplorer(CoverageExplorer):
         res = run_coverage_h3_elements(
             self._elems, self._plane_uid, self.min_elev.value, tg, AORS[self.aor.value],
             cell_res=self.cell_res.value, shard_res=(1 if self.use_shard.value else None),
-            chunk_steps=10, progress=progress, terrain=self._terrain(),
+            chunk_steps=10, workers=(_n_workers() if self.use_shard.value else None),
+            progress=progress, terrain=self._terrain(),
             continuity_overlap_s=overlap,
             require_different_plane=self.require_diff_plane.value,
             k_values=[self.k_cov.value], default_k=self.k_cov.value)
