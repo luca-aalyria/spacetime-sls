@@ -277,34 +277,51 @@ class CoverageExplorer:
             self.run_btn.disabled = False
             self.run_btn.description = "Run simulation"
 
+    @staticmethod
+    def _fig_widget(make_fig, empty_text=None):
+        """A tab child holding the rendered figure as PNG widget state (no output
+        streaming — deterministic across frontends, persists across page reloads)."""
+        import io as _io
+        if make_fig is None:
+            return w.HTML(f"<i>{empty_text}</i>")
+        try:
+            fig = make_fig()
+            if fig is None:
+                return w.HTML(f"<i>{empty_text or 'nothing to plot'}</i>")
+            buf = _io.BytesIO()
+            fig.savefig(buf, format="png", dpi=110, bbox_inches="tight")
+            plt.close(fig)
+            return w.Image(value=buf.getvalue(), format="png",
+                           layout=w.Layout(max_width="98%"))
+        except Exception:
+            return w.HTML("<pre style='color:#a00'>" + traceback.format_exc()[-2000:] + "</pre>")
+
     def _append_run_panel(self, res, n):
         """Render this run's plots into a fresh tab appended to the runs history (previous runs
         stay visible), with a header echoing the input parameters and a ✕ Close button."""
         self._run_count = n
         alpha, ak, aor = self.hex_alpha.value, self.k_cov.value, self.aor.value
-        box = w.Layout(border="1px solid #ccc", padding="6px", margin="2px", min_height="60px")
-        o_av, o_siv, o_mbb, o_lat, o_hist = (w.Output(layout=box) for _ in range(5))
-        inner = w.Tab(children=[o_av, o_siv, o_mbb, o_lat, o_hist])
-        for i, t in enumerate(self.tab_titles):
-            inner.set_title(i, t)
-        self._draw(o_av, lambda: plot_coverage_hexmap(
-            res, title=f"Coverage availability (k={ak}) - {aor}", alpha=alpha))
-        self._draw(o_siv, lambda: plot_sats_in_view_hexmap(
-            res, title=f"Mean satellites in view (time-avg) - {aor}", alpha=alpha))
-        if "mbb_feasible" in res:
-            self._draw(o_mbb, lambda: plot_mbb_feasible_hexmap(
-                res, title=f"Make-before-break feasible - {aor}", alpha=alpha))
-        else:
-            with o_mbb:
-                clear_output(wait=True)
-                print("Enable the 'k=1 make-before-break gate' control to compute handover feasibility.")
-        self._draw(o_lat, lambda: plot_sats_in_view_vs_latitude(res))
-        self._draw(o_hist, lambda: plot_availability_hist(res))
+        children = [
+            self._fig_widget(lambda: plot_coverage_hexmap(
+                res, title=f"Coverage availability (k={ak}) - {aor}", alpha=alpha)),
+            self._fig_widget(lambda: plot_sats_in_view_hexmap(
+                res, title=f"Mean satellites in view (time-avg) - {aor}", alpha=alpha)),
+            self._fig_widget(
+                (lambda: plot_mbb_feasible_hexmap(
+                    res, title=f"Make-before-break feasible - {aor}", alpha=alpha))
+                if "mbb_feasible" in res else None,
+                empty_text="Enable the 'k=1 make-before-break gate' control to "
+                           "compute handover feasibility."),
+            self._fig_widget(lambda: plot_sats_in_view_vs_latitude(res)),
+            self._fig_widget(lambda: plot_availability_hist(res)),
+        ]
+        titles = list(self.tab_titles)
         if hasattr(self, "_elems"):          # Live explorer: record the constellation used
-            o_cons = w.Output(layout=box)
-            inner.children = (*inner.children, o_cons)
-            inner.set_title(len(inner.children) - 1, "Constellation")
-            self._draw(o_cons, self._constellation_fig)
+            children.append(self._fig_widget(self._constellation_fig))
+            titles.append("Constellation")
+        inner = w.Tab(children=children)
+        for i, t in enumerate(titles):
+            inner.set_title(i, t)
         params = res["_params"]
         hdr = w.HTML(f"<b>Run {n}</b> — {res['_total_sats']} sats · {res['_shape']}<br>"
                      f"<span style='font-size:90%;color:#555'>"
