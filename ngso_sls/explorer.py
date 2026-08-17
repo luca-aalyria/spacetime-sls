@@ -843,35 +843,21 @@ class MinSatSweep:
         """Render this sweep's plot(s) into a fresh panel appended below previous runs, with a
         header echoing the input parameters and a ✕ Close button (previous runs are kept)."""
         self._run_count = n
-        box = w.Layout(border="1px solid #ccc", padding="6px", margin="2px", min_height="60px")
-        out = w.Output(layout=box)
-        with out:
-            clear_output(wait=True)
-            try:
-                from .viz.plots import (plot_min_sat_sweep, plot_inclination_sweep,
-                                        plot_inclination_coverage_curves)
-                if mode == "coverage_vs_N":
-                    fig = plot_min_sat_sweep(res)
-                    plt.show()
-                    plt.close(fig)
-                elif mode == "multi_shape":
-                    from .viz.plots import plot_multi_shape_scatter, plot_multi_shape_heatmap
-                    k0 = res["k_values"][0]
-                    fig = plot_multi_shape_scatter(res, k=k0)
-                    plt.show()
-                    plt.close(fig)
-                    fig = plot_multi_shape_heatmap(res, k=k0)
-                    plt.show()
-                    plt.close(fig)
-                else:
-                    fig = plot_inclination_coverage_curves(res)   # coverage-vs-N per inclination
-                    plt.show()
-                    plt.close(fig)
-                    fig = plot_inclination_sweep(res)             # min-N-vs-inclination summary
-                    plt.show()
-                    plt.close(fig)
-            except Exception:
-                traceback.print_exc()
+        from .viz.plots import (plot_min_sat_sweep, plot_inclination_sweep,
+                                plot_inclination_coverage_curves,
+                                plot_multi_shape_scatter, plot_multi_shape_heatmap)
+        # PNG Image-widget state, same rationale as the coverage run tabs: Output-widget
+        # streaming drops plots on some frontends and is lost on page reload.
+        if mode == "coverage_vs_N":
+            figs = [lambda: plot_min_sat_sweep(res)]
+        elif mode == "multi_shape":
+            k0 = res["k_values"][0]
+            figs = [lambda: plot_multi_shape_scatter(res, k=k0),
+                    lambda: plot_multi_shape_heatmap(res, k=k0)]
+        else:
+            figs = [lambda: plot_inclination_coverage_curves(res),
+                    lambda: plot_inclination_sweep(res)]
+        out = w.VBox([CoverageExplorer._fig_widget(f) for f in figs])
         hdr = w.HTML(f"<b>Run {n}</b> ({mode}) — <span style='font-size:90%;color:#555'>"
                      + " · ".join(f"{k}={v}" for k, v in self._params().items())
                      + " · (CSV kept on disk)</span>")
