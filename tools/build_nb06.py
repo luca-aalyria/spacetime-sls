@@ -17,6 +17,8 @@ def code(src):
 
 md("""# NGSO SLS — Intent Analytics (live Spacetime / fss01-demo)
 
+**Notebook version: v1.1.0** — bumped on every notebook change (`tools/bump_nb_version.py`; patch=fix, minor=feature, major=restructure)
+
 What the solver actually *decided*, derived from installed intents: gateway load, route
 structure, contact-plan Gantt, OISL mesh, and predicted-vs-actual validation with the
 node→platform id join done properly (via `RK_CONTAINS`).

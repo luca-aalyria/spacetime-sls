@@ -151,3 +151,10 @@ python -m pytest tests/ -q
 - `docs/design-docs/brainstorming.md` — decisions log from the brainstorming sessions.
 - `docs/design-docs/slice-a-coverage-core.md` — detailed Slice A design (current).
 - `docs/design-docs/progress.md` — progress tracking + task checklist.
+
+## Notebook Versioning
+
+Every notebook carries `**Notebook version: vX.Y.Z**` in its first (title) markdown cell.
+**Any change to a notebook bumps it** — `tools/bump_nb_version.py notebooks/<nb>.ipynb
+[patch|minor|major]` (patch=fix, minor=feature, major=restructure). Generated notebooks
+(06 via `tools/build_nb06.py`) keep the marker in the BUILDER's header — bump it there.
