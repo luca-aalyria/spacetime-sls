@@ -151,6 +151,9 @@ class CoverageExplorer:
         return Constellation(tuple(replace(s, min_elev_user_deg=self.min_elev.value)
                                    for s in JIO_SCENARIOS[self.scenario.value].shells))
 
+    def _workload_sats(self) -> int:
+        return sum(sh.walker_T for sh in self.build_constellation().shells)
+
     def _terrain(self):
         """Optional per-cell horizon-mask callable from the terrain widgets (None = off)."""
         if not self.terrain_on.value:
@@ -239,7 +242,18 @@ class CoverageExplorer:
         try:
             with self.out_log:
                 clear_output(wait=True)
-                print("Running simulation…")
+                try:
+                    from .grids.h3_grid import h3_cells_for_aor
+                    n_cells = len(h3_cells_for_aor(AORS[self.aor.value],
+                                                   self.cell_res.value)[0])
+                    n_steps = int(self.duration_min.value * 60.0 / self.step_s.value) + 1
+                    n_sats = self._workload_sats()
+                    work = n_cells * n_steps * n_sats
+                    eta = work / 10e6 * (2.0 if self.handover_gate.value else 1.0)
+                    print(f"Running simulation… workload: {n_cells} cells × {n_sats} sats × "
+                          f"{n_steps} steps ≈ {work/1e6:.0f}M ops, rough ETA {max(eta, 1):.0f}s")
+                except Exception:
+                    print("Running simulation…")
             # NOTE: compute() runs OUTSIDE the Output context on purpose — ipywidgets'
             # Output.__exit__ renders AND SWALLOWS exceptions, which previously let run()
             # fall through to the panel code with `res` unbound.
@@ -592,6 +606,15 @@ class LiveCoverageExplorer(CoverageExplorer):
                          f"@{inc:.1f}°/{alt_km:.0f}km")
         res["_params"] = self._params()
         return res
+
+    def _workload_sats(self) -> int:
+        if self._source is not None:        # cheap: Walker maths / cached pull; no compute
+            try:
+                e, _, _ = self._source()
+                return int(e.shape[0])
+            except Exception:
+                return int(self._elems.shape[0])
+        return int(self._elems.shape[0])
 
     def _constellation_fig(self):
         """Lattice + altitude snapshot of the elements THIS run used (source re-read at Run)."""
