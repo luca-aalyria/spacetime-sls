@@ -155,6 +155,9 @@ python -m pytest tests/ -q
 ## Notebook Versioning
 
 Every notebook carries `**Notebook version: vX.Y.Z**` in its first (title) markdown cell.
-**Any change to a notebook bumps it** — `tools/bump_nb_version.py notebooks/<nb>.ipynb
-[patch|minor|major]` (patch=fix, minor=feature, major=restructure). Generated notebooks
-(06 via `tools/build_nb06.py`) keep the marker in the BUILDER's header — bump it there.
+**Bump it whenever the notebook's behavior changes** — that includes edits to the `.ipynb`
+AND behavior-affecting changes in the modules it surfaces (`ngso_sls.explorer`, pipeline,
+spacetime client): the notebooks are thin shells, most changes land module-side.
+`tools/bump_nb_version.py notebooks/<nb>.ipynb [patch|minor|major]` (patch=fix,
+minor=feature, major=restructure). Generated notebooks (06 via `tools/build_nb06.py`)
+keep the marker in the BUILDER's header — bump it there. Same commit as the change.
