@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Probe the capacity-estimation datasets on a live Store using interval/diff time-specs.
 
-BEAM_CANDIDATE_SEGMENT / PROPAGATION_VECTOR_SEGMENT / SCHEDULE are written continuously
-and duration-cached — `current` snapshots can be huge or transient, so this probes with
-the SMALLEST window that returns data (one solver quantum ~10s, then 60s, 600s).
+DEPRECATED in favor of tools/quantum_sampler.py (Listen-based). Interval windows select
+on COMMIT time and BLOCK when end_time is at/after the commit watermark — anchor windows
+strictly in the past if you use this at all.
 
 Usage:  .venv/bin/python tools/probe_capacity_datasets.py [--target localhost:9999]
         (needs a port-forward: tools/sandbox_live_setup.sh, START_JUPYTER=0)

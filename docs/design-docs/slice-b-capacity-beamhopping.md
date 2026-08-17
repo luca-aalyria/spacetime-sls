@@ -65,5 +65,10 @@ continuously write outputs back. "Querying" them = writing inputs, reading outpu
   - PROPAGATION_VECTOR_SEGMENT: one hour-bucket slice = 70,875 entities / 224 MB in 9 s
     (`T:<bucket>#<tx-platform>/<rx-platform>`, ~300 B each: per-pair link-budget terms).
   - Batch-written (live window between batches = 0 mutations): read via Listen DUMP with
-    id-prefix slices, not interval GetEntities (full-history scan; verified in storage
-    logs it runs past client deadlines).
+    id-prefix slices. **interval/diff GetEntities semantics (corrected 2026-08-17, owner
+    feedback):** the window selects on COMMIT time (when data was written), NOT the
+    forecast time the data describes; an end_time at/after the current commit watermark
+    BLOCKS until wall-clock passes it (our end_time=now probes hung on this), and the
+    response also carries the last committed version before start for every matching
+    entity. Usable as a delta reader only with strictly-past windows; Listen dump remains
+    the primary reader.

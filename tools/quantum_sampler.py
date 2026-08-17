@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Listen-based one-quantum sampler for transient Store datasets.
 
-Why: interval/diff GetEntities on BEAM_CANDIDATE_SEGMENT etc. is a full-history scan
-server-side (returns last-version-before-window for EVERY entity) — it times out on big
-datasets. Listen is the intended reader: it streams a chunked dump of current state, a
+Why: GetEntities interval/diff windows select on COMMIT time (when rows were written,
+not the forecast time they describe); an end_time at/after the commit watermark BLOCKS
+until real time passes it, and the reply carries last-version-before-start for every
+entity — so 'now'-anchored windows hang on big datasets. Listen is the intended reader: it streams a chunked dump of current state, a
 dump_complete delimiter, then live mutations. We count the dump as it streams (dataset
 size for free), then collect live mutations for ~one solver quantum, then disconnect.
 
