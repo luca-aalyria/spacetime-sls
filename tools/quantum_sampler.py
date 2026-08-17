@@ -83,7 +83,8 @@ def main():
     ap.add_argument("--dump-timeout", type=float, default=300.0)
     ap.add_argument("--id-prefix", default=None)
     args = ap.parse_args()
-    stub = pg.StoreStub(grpc.insecure_channel(args.target))
+    stub = pg.StoreStub(grpc.insecure_channel(
+        args.target, options=[("grpc.max_receive_message_length", 512 << 20)]))
 
     for t in args.types.split(","):
         t = t.strip()
