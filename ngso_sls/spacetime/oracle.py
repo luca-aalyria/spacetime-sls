@@ -22,36 +22,23 @@ _ID_RE = re.compile(r"^T:(?P<bucket>[^#]+)#(?P<antenna>[^@]+)@(?P<lat>-?[\d.]+)/
 
 def read_beam_candidates(target="localhost:9999", bucket_prefix=None, dump_timeout_s=600.0):
     """Listen-dump BEAM_CANDIDATE_SEGMENT entities (optionally one time-bucket prefix).
-    Returns the list of storage Entity protos. Read-only (Listen is a subscription;
-    we disconnect after the dump)."""
+    Returns the list of storage Entity protos. Read-only."""
     _deps.require("HAS_STORAGE", "proto_internal.storage (vendored stubs)")
-    import time as _time
     grpc = _deps.grpc
     pb = _deps.storage_pb2
     stub = _deps.storage_pb2_grpc.StoreStub(grpc.insecure_channel(
         target, options=[("grpc.max_receive_message_length", 512 << 20)]))
-    req = pb.ListenRequest()
-    req.group.add().type = pb.EntityType.Value("BEAM_CANDIDATE_SEGMENT")
-    req.dump_only = True
+    # Canonical read (owner-confirmed): current + EntityFilter.id_ranges — the ID range IS
+    # the forecast-interval selector (IDs are time-bucketed; on fss01 they carry a leading
+    # 'T:', e.g. 'T:2026-08-17T08:45#<antenna>@<lat>/<lon>' — check one ID per instance).
+    req = pb.GetEntitiesRequest(type=pb.EntityType.Value("BEAM_CANDIDATE_SEGMENT"))
+    req.current.SetInParent()
     if bucket_prefix:
-        rng = req.ranges.add()
-        rng.type = req.group[0].type
+        rng = req.filter.id_ranges.add()
+        rng.type = req.type
         rng.begin = bucket_prefix
-        rng.end = bucket_prefix + "\U0010ffff"
-    out = []
-    t0 = _time.monotonic()
-    stream = stub.Listen(req, timeout=dump_timeout_s)
-    try:
-        for chunk in stream:
-            if chunk.HasField("dump_complete"):
-                break
-            for mut in chunk.updates.mutations:
-                out.append(mut.entity)
-            if _time.monotonic() - t0 > dump_timeout_s:
-                break
-    finally:
-        stream.cancel()
-    return out
+        rng.end = bucket_prefix + "\U0010ffff"     # lexicographic prefix glob [begin, end)
+    return [part.entity for part in stub.GetEntities(req, timeout=dump_timeout_s)]
 
 
 def beam_candidates_to_coverage(entities, cell_res=3, k_values=(1, 2), default_k=None,
