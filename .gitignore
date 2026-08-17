@@ -8,3 +8,4 @@ outputs/
 references/
 .ipynb_checkpoints/
 notebooks/live_coverage_availability*.csv
+notebooks/*_run*_*.png

@@ -161,3 +161,9 @@ spacetime client): the notebooks are thin shells, most changes land module-side.
 `tools/bump_nb_version.py notebooks/<nb>.ipynb [patch|minor|major]` (patch=fix,
 minor=feature, major=restructure). Generated notebooks (06 via `tools/build_nb06.py`)
 keep the marker in the BUILDER's header — bump it there. Same commit as the change.
+
+## Commit Discipline
+
+**Commit immediately after every change** to notebooks, `ngso_sls/` code, tools, or docs —
+one focused commit per change, never batch a session's work. Notebook commits include the
+version bump (see Notebook Versioning) in the same commit.
