@@ -876,6 +876,17 @@ class MinSatSweep:
             figs = [lambda: plot_inclination_coverage_curves(res),
                     lambda: plot_inclination_sweep(res)]
         out = w.VBox([CoverageExplorer._fig_widget(f) for f in figs])
+        base = os.path.splitext(self.csv_path)[0]
+        saved = []
+        for i, ch in enumerate(out.children):
+            if isinstance(ch, w.Image):      # persist for slides/reports (like run tabs)
+                fn = f"{base}_run{n}_plot{i + 1}.png"
+                with open(fn, "wb") as fh:
+                    fh.write(ch.value)
+                saved.append(fn)
+        if saved:
+            with self.out_log:
+                print("  PNGs: " + ", ".join(saved))
         hdr = w.HTML(f"<b>Run {n}</b> ({mode}) — <span style='font-size:90%;color:#555'>"
                      + " · ".join(f"{k}={v}" for k, v in self._params().items())
                      + " · (CSV kept on disk)</span>")
