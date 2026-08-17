@@ -26,7 +26,7 @@ DEFAULT_TYPES = "BEAM_CANDIDATE_SEGMENT,PROPAGATION_VECTOR_SEGMENT,SCHEDULE"
 
 def sample(stub, type_name, window_s, dump_timeout_s, id_prefix=None):
     req = pb.ListenRequest()
-    req.group.type = pb.EntityType.Value(type_name)
+    req.group.add().type = pb.EntityType.Value(type_name)   # repeated: one group per type
     if id_prefix:
         rng = req.ranges.add()
         rng.type = req.group.type
