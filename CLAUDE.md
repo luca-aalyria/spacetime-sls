@@ -177,3 +177,10 @@ environment, commit/versioning discipline), `docs/design-docs/progress.md` (stat
 steps), `docs/design-docs/*.md` (designs), and tool headers under `tools/` (live-access
 runbooks: sandbox_live_setup.sh, quantum_sampler.py, dump_live_store.py,
 regen_spacetime_stubs.sh). If repo docs and assistant memory ever disagree, the repo wins.
+
+## Package Versioning
+
+`ngso_sls` carries its version in BOTH `pyproject.toml` and `ngso_sls/__init__.py`
+(`__version__`) — bump them TOGETHER on every `ngso_sls/` code change, same commit
+(patch=fix, minor=feature/module, major=breaking). History: 0.1≈Slice A core,
+0.2≈Slice E offline increment, 0.3≈live Store integration + unified explorer + oracle.
