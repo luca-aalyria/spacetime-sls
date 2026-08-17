@@ -339,6 +339,11 @@ class CoverageExplorer:
         if hasattr(self, "_elems"):          # Live explorer: record the constellation used
             children.append(self._fig_widget(self._constellation_fig))
             titles.append("Constellation")
+            if getattr(self, "_oracle_pair", None):
+                from .spacetime.oracle import plot_oracle_delta
+                eng, orc = self._oracle_pair
+                children.append(self._fig_widget(lambda: plot_oracle_delta(eng, orc, k=1)))
+                titles.append("Spacetime Δ")
         inner = w.Tab(children=children)
         base = os.path.splitext(self.csv_path)[0]
         saved = []
@@ -494,7 +499,7 @@ def _pull_spacetime_elements(target="localhost:9999", dump_dir=None):
               and str(e.id).startswith("user-terminal")
               and e.antenna.HasField("field_of_regard")]
     min_elev = (90.0 - float(np.median(angles))) if angles else None
-    return built["elems"], built["plane_uid"], label, min_elev
+    return built["elems"], built["plane_uid"], label, min_elev, built["ref_epoch_s"]
 
 
 class ConstellationSource:
@@ -527,8 +532,10 @@ class ConstellationSource:
     def _pull(self, _=None):
         self.pull_status.value = "⏳ pulling…"
         try:
-            elems, pu, label, min_elev = _pull_spacetime_elements(self.target.value, self._dump_dir)
+            elems, pu, label, min_elev, ref_epoch = _pull_spacetime_elements(
+                self.target.value, self._dump_dir)
             self._pulled = (elems, pu, label)
+            self.ref_epoch_s = ref_epoch
             self.model_min_elev = min_elev
             hint = (f"; model min-elev (user links): {min_elev:g}° — set the slider to match"
                     if min_elev is not None else "")
@@ -569,6 +576,9 @@ class LiveCoverageExplorer(CoverageExplorer):
         self._elems = np.asarray(e, dtype=float)
         self._plane_uid = np.asarray(pu)
         self._label = label
+        self.compare_spacetime = w.Checkbox(
+            value=False, description="Compare vs Spacetime prediction (pull beam candidates)")
+        self._oracle_pair = None
         super().__init__(csv_path=csv_path)
         # the scenario widget only feeds run-log text here (compute() ignores it)
         self.scenario = w.Dropdown(options=[label], value=label, description="Scenario")
@@ -593,6 +603,7 @@ class LiveCoverageExplorer(CoverageExplorer):
             w.HBox([self.require_diff_plane]),
             w.HBox([self.hex_alpha, self.terrain_on]),
             w.HBox([self.terrain_source]),
+            w.HBox([self.compare_spacetime]),
             self.run_btn,
             w.HBox([self.progress, self.status]),
         ])
@@ -618,6 +629,22 @@ class LiveCoverageExplorer(CoverageExplorer):
             k_values=[self.k_cov.value], default_k=self.k_cov.value)
         alt_km = float((self._elems[:, 0] * (1 + self._elems[:, 1])).mean()) - 6378.137
         inc = float(np.degrees(self._elems[:, 2]).mean())
+        self._oracle_pair = None
+        if self.compare_spacetime.value:
+            from datetime import datetime, timezone
+            from .spacetime.oracle import (read_beam_candidates, beam_candidates_to_coverage,
+                                           engine_coverage_at_points)
+            prefix = "T:" + datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+            ents = read_beam_candidates(bucket_prefix=prefix)
+            if ents:
+                orc = beam_candidates_to_coverage(ents, cell_res=self.cell_res.value,
+                                                  k_values=[1, self.k_cov.value])
+                owner = getattr(self._source, "__self__", None)
+                ref = getattr(owner, "ref_epoch_s", None) or 0.0
+                eng = engine_coverage_at_points(
+                    self._elems, self._plane_uid, orc, ref,
+                    min_elev_deg=self.min_elev.value, k_values=[1, self.k_cov.value])
+                self._oracle_pair = (eng, orc)
         res["_total_sats"] = int(self._elems.shape[0])
         res["_shape"] = (f"{self._label}: {res['_total_sats']} sats / "
                          f"{len(np.unique(self._plane_uid))} planes "

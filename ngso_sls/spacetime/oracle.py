@@ -118,4 +118,56 @@ def beam_candidates_to_coverage(entities, cell_res=3, k_values=(1, 2), default_k
             "availability": availability_by_k[dk],
             "availability_by_k": availability_by_k,
             "sats_in_view_mean": siv, "min_elev_deg": None,
-            "n_samples": n_time, "n_points": n_cellpts}
+            "n_samples": n_time, "n_points": n_cellpts,
+            "times_unix": np.array(all_times, dtype=float)}
+
+
+def engine_coverage_at_points(elems, plane_uid, oracle_res, ref_epoch_s,
+                              min_elev_deg=25.0, k_values=(1, 2), default_k=None):
+    """Our KeplerJ2 engine evaluated at the ORACLE's exact ground points and sample times —
+    the apples-to-apples counterpart for beam_candidates_to_coverage (same constellation,
+    same times, same points; residual = link-predictor physics vs pure min-elev geometry).
+    `ref_epoch_s` is the unix epoch the element set was reconciled to
+    (platforms_to_elements()['ref_epoch_s'])."""
+    from datetime import datetime, timezone
+    from ..propagation.kepler_j2 import KeplerJ2Propagator
+    from ..geometry.frames import gmst_rad, eci_to_ecef, geodetic_to_ecef, enu_up
+    from ..geometry.access import elevation_deg
+
+    lat, lon = oracle_res["lat"], oracle_res["lon"]
+    times_rel = oracle_res["times_unix"] - float(ref_epoch_s)
+    r_eci = KeplerJ2Propagator().propagate(np.asarray(elems, float), times_rel)
+    gmst = gmst_rad(datetime.fromtimestamp(ref_epoch_s, tz=timezone.utc), times_rel)
+    r_ecef = eci_to_ecef(r_eci, gmst)
+    elev = elevation_deg(geodetic_to_ecef(lat, lon), enu_up(lat, lon), r_ecef)
+    counts = (elev >= float(min_elev_deg)).sum(axis=-1)      # (n_points, n_time)
+    ks = sorted(set(k_values))
+    availability_by_k = {k: (counts >= k).mean(axis=1) for k in ks}
+    dk = default_k if default_k in availability_by_k else ks[0]
+    return {"cells": oracle_res["cells"], "lat": lat, "lon": lon,
+            "availability": availability_by_k[dk], "availability_by_k": availability_by_k,
+            "sats_in_view_mean": counts.mean(axis=1), "min_elev_deg": float(min_elev_deg),
+            "n_samples": len(times_rel), "n_points": len(lat)}
+
+
+def plot_oracle_delta(engine_res, oracle_res, k=1):
+    """Scatter maps: engine vs Spacetime-predicted availability and the per-point delta."""
+    import matplotlib.pyplot as plt
+    e = engine_res["availability_by_k"][k]
+    o = oracle_res["availability_by_k"][k]
+    d = e - o
+    fig, ax = plt.subplots(1, 2, figsize=(13, 4.5))
+    sc = ax[0].scatter(oracle_res["lon"], oracle_res["lat"], c=o, s=26,
+                       cmap="RdYlGn", vmin=0, vmax=1)
+    ax[0].set_title(f"Spacetime-predicted availability (k={k}, "
+                    f"{oracle_res['n_samples']} samples)")
+    fig.colorbar(sc, ax=ax[0])
+    sc2 = ax[1].scatter(oracle_res["lon"], oracle_res["lat"], c=d, s=26,
+                        cmap="coolwarm", vmin=-0.2, vmax=0.2)
+    ax[1].set_title(f"Δ engine−Spacetime (mean {d.mean():+.4f}, max|Δ| {abs(d).max():.4f}, "
+                    f"agree≥99%: {(abs(d) <= 0.01).mean():.0%})")
+    fig.colorbar(sc2, ax=ax[1])
+    for a in ax:
+        a.set_xlabel("lon"); a.set_ylabel("lat")
+    plt.tight_layout()
+    return fig
