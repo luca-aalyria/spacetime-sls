@@ -72,3 +72,8 @@ continuously write outputs back. "Querying" them = writing inputs, reading outpu
     response also carries the last committed version before start for every matching
     entity. Usable as a delta reader only with strictly-past windows; Listen dump remains
     the primary reader.
+  - **Forecast-time selection is by RANGE ID (confirmed, owner feedback 2026-08-17):** the
+    sanctioned mechanism for selecting a forecast interval is the entity-ID range — IDs
+    are time-bucketed (`T:<bucket>#...`), so `ListenRange`/id-prefix slices ARE the
+    forecast-time filter (what `oracle.read_beam_candidates(bucket_prefix=...)` and
+    `tools/quantum_sampler.py --id-prefix` already implement).
