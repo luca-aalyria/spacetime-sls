@@ -167,3 +167,13 @@ keep the marker in the BUILDER's header — bump it there. Same commit as the ch
 **Commit immediately after every change** to notebooks, `ngso_sls/` code, tools, or docs —
 one focused commit per change, never batch a session's work. Notebook commits include the
 version bump (see Notebook Versioning) in the same commit.
+
+## Session Bootstrap (fresh session / another person)
+
+The assistant's persistent memory lives at `~/.claude/projects/-workspace/memory/` INSIDE
+its sandbox — it is NOT in the shared mount and does not transfer to other people or
+machines. Everything needed to pick this project up is IN-REPO: this file (conventions,
+environment, commit/versioning discipline), `docs/design-docs/progress.md` (state + next
+steps), `docs/design-docs/*.md` (designs), and tool headers under `tools/` (live-access
+runbooks: sandbox_live_setup.sh, quantum_sampler.py, dump_live_store.py,
+regen_spacetime_stubs.sh). If repo docs and assistant memory ever disagree, the repo wins.

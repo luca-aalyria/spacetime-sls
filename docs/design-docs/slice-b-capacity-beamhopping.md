@@ -56,7 +56,14 @@ continuously write outputs back. "Querying" them = writing inputs, reading outpu
    dwell/revisit (beam-hopping duty cycle) + modcod (spectral efficiency) → capacity ≡
    the Slice B oracle. SBI is NOT needed (that's for real device agents; sim readout is
    the Store).
-- fss01-demo dataset counts for beam-candidates/prop-vectors/schedules: UNVERIFIED (probe
-  attempted 2026-08-17; port-forward dropped mid-probe — retry). Old instances may retain
-  these only transiently (durationcache) — the diff/interval GetEntities time-specs are
-  the fallback readout.
+- **VERIFIED on fss01-demo (2026-08-17, tools/quantum_sampler.py — Listen-based):**
+  - SCHEDULE: 383 entities (one per sdn-agent: sats/gateways/UTs), 0.7 MB; live mutation
+    rate ~96/s (scheduler rewrites continuously) — trivially readable.
+  - BEAM_CANDIDATE_SEGMENT: 197,444 entities / 3.07 GB current horizon (122 s dump).
+    IDs are TIME-BUCKETED (`T:<iso-minute>#<sat-antenna>@<lat>/<lon>`, ~18.5 KB each) —
+    `ListenRange` id-prefix = time slicing.
+  - PROPAGATION_VECTOR_SEGMENT: one hour-bucket slice = 70,875 entities / 224 MB in 9 s
+    (`T:<bucket>#<tx-platform>/<rx-platform>`, ~300 B each: per-pair link-budget terms).
+  - Batch-written (live window between batches = 0 mutations): read via Listen DUMP with
+    id-prefix slices, not interval GetEntities (full-history scan; verified in storage
+    logs it runs past client deadlines).
