@@ -30,6 +30,8 @@ fi
 
 cd "$REPO"
 mkdir -p "$CACHE"
+# repo credential helper (auth for apk.cgr.dev Chainguard APKs etc.)
+"$BAZEL" run @tweag-credential-helper//installer --repository_cache="$CACHE" >/dev/null
 # fetch = download all external repos for the targets, no compilation.
 # --config release matters only for build options; deps are the same.
 # Target set = everything the ephemeral-instance mission needs:
@@ -38,10 +40,13 @@ mkdir -p "$CACHE"
 #   //tools/storectl                    bulk Store export/import/delete
 #   //github/tools/nbictl/cmd/nbictl    model/provisioning rsync loaders
 #   //scenarios/pybuilder/...           authoritative NMTS scenario builder
+#   //helm/archon:archon.experimental.push   create's IMPLICIT archon image build
+#                                             (apko base: apk.cgr.dev; needs cred helper)
 "$BAZEL" fetch \
   //spacebox //spacebox/archon //tools/storectl \
   //github/tools/nbictl/cmd/nbictl:nbictl \
   //scenarios/pybuilder/... \
+  //helm/archon:archon.experimental.push \
   --repository_cache="$CACHE"
 echo
 echo "Done. Cache: $CACHE ($(du -sh "$CACHE" | cut -f1))"
