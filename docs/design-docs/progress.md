@@ -1,6 +1,33 @@
 # NGSO SLS Toolkit — Progress & Next Steps
 
-## Last Updated: 2026-08-17 (owner direction: real Jio answers + Spacebox integration in parallel)
+## Last Updated: 2026-08-18 (pinned-instance end-to-end validation COMPLETE)
+
+### Milestone (2026-08-18): full Jio model on the version-pinned instance
+- Instance: Spacetime `20.2.1771980430-ff066dc` (the fss01-demo release) on
+  e2e-internal, release `luca-sls1`, workloads in namespace `spacetime`. Build
+  fixes recorded in `spacebox-smoke-report.md` (chart prune, namespace split,
+  node-selector removal, `storage` service alias, scale-from-zero).
+- Model: 200-sat Walker 200/20/1 @48°/650 km + 251 India res-3 UTs + 3 gateways
+  + 502 SR-TE path requests = 9,834 entities (sources: `scenarios/pybuilder-jio/`).
+- Pipeline produced: 20,974 beam candidates, 29,682 link reports, 8,305
+  propagation vectors, 455 schedules, 502 allocated data rates, 157 intents;
+  feeder layer assigned 3/3 gateway-satellite links.
+- Two model requirements found: satellite user antennas need a conic
+  `field_of_regard` (75° per fss01) or the predictor emits no beam candidates;
+  ground FOR 80° sets the effective 10° elevation mask.
+- Oracle compare (nb08 v2.0.0, `output/pinned-instance/`): engine availability
+  matches the instance EXACTLY (max |Δ| = 0.0000, 253 cells, 210 samples,
+  2-h window) with two-body propagation from unix epoch 0 (NMTS Keplerian
+  without epoch) at the 10° mask. `ngso_sls` v0.5.1 adds the propagator
+  override on `engine_coverage_at_points`.
+- Operational limits found: sqlite storage saturates under 30 predictor
+  workers (probe cascade); 8 workers is sustainable but trails real time.
+  For live intent streams use `--storage pg` next time.
+- Cleanup owed: namespace `spacetime` on e2e-internal (manual delete),
+  minkowski local patches (spacebox.go ×2, variables.bzl) marked REVERT ME,
+  `luca-sls1` reaps on TTL.
+
+## 2026-08-17 (owner direction: real Jio answers + Spacebox integration in parallel)
 
 ### Two parallel workstreams (owner-directed 2026-08-17)
 - **A. Jio answers:** (1) M7 min-N/k sweep over dual-shell ranges — Slice A machinery ready,
