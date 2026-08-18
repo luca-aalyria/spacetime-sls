@@ -184,3 +184,33 @@ regen_spacetime_stubs.sh). If repo docs and assistant memory ever disagree, the 
 (`__version__`) — bump them TOGETHER on every `ngso_sls/` code change, same commit
 (patch=fix, minor=feature/module, major=breaking). History: 0.1≈Slice A core,
 0.2≈Slice E offline increment, 0.3≈live Store integration + unified explorer + oracle.
+
+## Writing Style (owner directive 2026-08-18 — applies to ALL docs, comments, commits)
+
+Follow ASD-STE100 Simplified Technical English:
+1. One meaning per word, one word per meaning - keep terms consistent
+2. Active voice, present tense, with a stated subject
+3. Short sentences - 20 words max in procedures, 25 in descriptions
+4. One instruction per sentence, one topic per paragraph
+5. Keep articles and relative pronouns - no telegraphic style
+6. No noun clusters longer than three words
+7. No -ing participial phrases where a finite verb works
+
+Design docs: main body describes the target design in present tense; tradeoffs go in a
+decision-log chapter; status lives ONLY in the Work Items table; one canonical home per
+concept; say what the system does, not what it doesn't; no staged-release framing unless
+asked; no work-item numbers in prose; implementation notes as > block quotes.
+
+Code comments: describe what a field/function IS, not what callers do with it; no
+upstream-layer knowledge in lower-layer code; do not document a field's architectural
+role; TODOs may break these rules for context; no prior-behaviour comments; short suffix
+note when a name is not self-explanatory; header for related inline blocks.
+
+Editing: reviewable edit-tool changes (avoid sed / replace-all); check if a concept
+already has a home before adding; flag duplication, contradictions, and dead references
+immediately.
+
+Release notes (minkowski): update
+public_docs/customers/content/customers/release-notes/<quarter>/_vNext.md in the same MR;
+replace the Placeholder line; state the change, then the reader action; name the flag or
+chart value.
