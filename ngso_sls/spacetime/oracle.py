@@ -110,12 +110,15 @@ def beam_candidates_to_coverage(entities, cell_res=3, k_values=(1, 2), default_k
 
 
 def engine_coverage_at_points(elems, plane_uid, oracle_res, ref_epoch_s,
-                              min_elev_deg=25.0, k_values=(1, 2), default_k=None):
+                              min_elev_deg=25.0, k_values=(1, 2), default_k=None,
+                              propagator=None):
     """Our KeplerJ2 engine evaluated at the ORACLE's exact ground points and sample times —
     the apples-to-apples counterpart for beam_candidates_to_coverage (same constellation,
     same times, same points; residual = link-predictor physics vs pure min-elev geometry).
     `ref_epoch_s` is the unix epoch the element set was reconciled to
-    (platforms_to_elements()['ref_epoch_s'])."""
+    (platforms_to_elements()['ref_epoch_s']). `propagator` overrides the engine used;
+    pass KeplerJ2Propagator(j2=0.0) to match a two-body oracle (Spacetime propagates
+    NMTS Keplerian elements two-body; an absent proto epoch means unix 0)."""
     from datetime import datetime, timezone
     from ..propagation.kepler_j2 import KeplerJ2Propagator
     from ..geometry.frames import gmst_rad, eci_to_ecef, geodetic_to_ecef, enu_up
@@ -123,7 +126,8 @@ def engine_coverage_at_points(elems, plane_uid, oracle_res, ref_epoch_s,
 
     lat, lon = oracle_res["lat"], oracle_res["lon"]
     times_rel = oracle_res["times_unix"] - float(ref_epoch_s)
-    r_eci = KeplerJ2Propagator().propagate(np.asarray(elems, float), times_rel)
+    prop = propagator if propagator is not None else KeplerJ2Propagator()
+    r_eci = prop.propagate(np.asarray(elems, float), times_rel)
     gmst = gmst_rad(datetime.fromtimestamp(ref_epoch_s, tz=timezone.utc), times_rel)
     r_ecef = eci_to_ecef(r_eci, gmst)
     elev = elevation_deg(geodetic_to_ecef(lat, lon), enu_up(lat, lon), r_ecef)
