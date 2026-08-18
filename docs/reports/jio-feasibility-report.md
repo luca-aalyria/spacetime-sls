@@ -58,6 +58,14 @@ was read directly and compared point-for-point:
 - **Coverage agreement**: SLS engine evaluated at the link predictor's exact 222 ground
   points and 10-second time samples → k=1 availability mean Δ **−0.0013**, max |Δ|
   **0.033**, ≥99% agreement in [Z]% of points — `figs/oracle_delta.png` [PENDING: figure export]
+- **End-to-end on a Jio candidate**: we loaded a 200-satellite Jio candidate
+  (Walker 200/20/1 at 48°/650 km, 251 India cells, 3 gateways) into a dedicated
+  instance pinned to the same software release. The production pipeline computed
+  20,974 beam-candidate segments, 29,682 link reports and 8,305 propagation
+  vectors; the solver assigned all 3 feeder links and wrote 157 routing intents.
+  Over a 2-hour window (210 samples, 253 India cells) the SLS engine reproduced
+  the instance's availability **exactly (max |Δ| = 0.0000)** at the model's
+  10° elevation mask — `figs/pinned_instance_oracle_compare.png`
 - **What the live system exposes** (all extracted programmatically, read-only):
 
 | Data | Live example (reference constellation) |
