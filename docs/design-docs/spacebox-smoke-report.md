@@ -62,3 +62,36 @@ farms), but it is not on the critical path. Guide extras adopted: `--scenario` l
    Customization → legacy beam-hopping oracle instance.
 3. Scenario population (write-path gate applies): pybuilder-generated NMTS for a Jio
    candidate; Store.Write restricted to spacebox namespaces.
+
+## Pinned-release instance build (2026-08-18)
+
+We deployed Spacetime `20.2.1771980430-ff066dc` (the fss01-demo release) with the
+spacebox CLI on e2e-internal, release name `luca-sls1`. The old charts need five
+manual fixes. Record them here for the next build.
+
+1. **Chart prune.** The 20.2 registry does not have all current charts. We cut
+   `helm/spacetime/variables.bzl` to 18 essential apps (local patch, marked REVERT ME).
+2. **Namespace split.** The 20.2 charts hardcode workload namespace `spacetime`.
+   Helm releases track in the target namespace (`luca-sls1`); workloads run in
+   `spacetime`. Create namespace `spacetime` before the install. Delete it manually
+   after the test — the reaper does not own it.
+3. **Missing releases.** `storage-sqlite` and `beam-hopping-solver` did not install
+   with the main create. Install them with direct `helm upgrade --install` from
+   `oci://us-central1-docker.pkg.dev/a5a-spacetime-artifacts/container-images/<chart>`.
+4. **Node selector.** The 20.2 charts pin `nodeSelector: node_pool=e2standard8`, a
+   label that only the fss01 cluster has. Pods stay Pending. Fix: remove the selector
+   (`kubectl patch <workload> --type json -p '[{"op":"remove",
+   "path":"/spec/template/spec/nodeSelector"}]'`), then delete Pending statefulset pods
+   so the controller recreates them. The cluster autoscaler then provisions nodes.
+5. **Storage service alias.** The charts deploy the service as `storage-sqlite`, but
+   all consumers resolve `storage.spacetime.svc.cluster.local:9999`. Create a Service
+   named `storage` in namespace `spacetime` with selector `app: storage-sqlite`,
+   port 9999. Without it, link-predictor Listen fails with UnknownHostException and
+   no solver output appears.
+
+Also: `satsolver-nmts` and `storage-sqlite` come up scaled to 0. Scale both to 1.
+
+**Result:** all pods Running. The full Jio 200-sat model (459 fragments + 502
+provisioning entities = 9,834 entities, 18,740 relationships) imported with storectl
+over a port-forward. link-predictor cache went to STREAMING with the full model and
+assigned ~530k compute tasks (2 workers). Solver-output ramp observation continues.
