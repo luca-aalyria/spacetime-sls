@@ -75,6 +75,11 @@ manual fixes. Record them here for the next build.
    Helm releases track in the target namespace (`luca-sls1`); workloads run in
    `spacetime`. Create namespace `spacetime` before the install. Delete it manually
    after the test — the reaper does not own it.
+   This is a 20.2-era limit: current charts route every resource through the
+   `aalyria.ns` helper, which honors `spacetime.singleNamespace` (the CLI passes
+   it), so current instances isolate per namespace and coexist on one cluster.
+   The 20.2 charts ignore that value. Consequence: at most ONE 20.2-pinned
+   instance per cluster; 20.2 + current instances coexist.
 3. **Missing releases.** `storage-sqlite` and `beam-hopping-solver` did not install
    with the main create. Install them with direct `helm upgrade --install` from
    `oci://us-central1-docker.pkg.dev/a5a-spacetime-artifacts/container-images/<chart>`.
