@@ -18,7 +18,11 @@ def code(src):
 
 md("""# NGSO SLS — Ephemeral Spacetime Instance: Jio Minimal Constellation
 
-**Notebook version: v2.0.0** — bumped on every notebook change (`tools/bump_nb_version.py`)
+**Notebook version: v2.1.0 — DEPRECATED.** Use **notebook 01** instead: select
+Source = "Spacetime (live NMTS)" and Instance = "ephemeral/pinned (:9996)". Notebook 01
+runs the same analysis and the "Spacetime Δ" compare against the selected instance.
+This notebook remains only as the runbook for LOADING a constellation into an empty
+ephemeral instance (guarded write path).
 
 This notebook targets the VERSION-PINNED ephemeral instance (Spacetime
 `20.2.1771980430-ff066dc`, the fss01-demo release). The instance runs the full Jio
