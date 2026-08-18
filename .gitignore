@@ -10,3 +10,4 @@ references/
 notebooks/live_coverage_availability*.csv
 notebooks/*_run*_*.png
 notebooks/jio_min_instance_coverage*.csv
+output/pinned-instance/beam_candidates.pkl
