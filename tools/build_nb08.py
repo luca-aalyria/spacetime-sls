@@ -18,18 +18,21 @@ def code(src):
 
 md("""# NGSO SLS — Ephemeral Spacetime Instance: Jio Minimal Constellation
 
-**Notebook version: v1.0.0** — bumped on every notebook change (`tools/bump_nb_version.py`)
+**Notebook version: v2.0.0** — bumped on every notebook change (`tools/bump_nb_version.py`)
 
-Loads the smallest Reliance Jio preset (**~200 @48° (minimal)**: 200 sats, 20 planes,
-650 km) into an EPHEMERAL spacebox instance (`luca-sls1` on e2e-internal, 6h TTL), reads
-it back via the live-NMTS path, and runs the Slice-A analysis on **India, H3 res 3**.
+This notebook targets the VERSION-PINNED ephemeral instance (Spacetime
+`20.2.1771980430-ff066dc`, the fss01-demo release). The instance runs the full Jio
+200-satellite NMTS model (9,834 entities): Walker 200/20/1 at 48 deg / 650 km, 251
+India H3 res-3 user terminals, 3 gateways, 502 SR-TE path requests. Scenario sources:
+`scenarios/pybuilder-jio/`.
 
 Prereq (this machine): port-forward into the instance's Store:
 ```
-kubectl --context e2e-internal port-forward svc/spacetime-storage -n luca-sls1 9997:9999
+kubectl --context e2e-internal port-forward svc/storage-sqlite -n spacetime 9996:9999
 ```
-Instance lifecycle: see `docs/design-docs/spacebox-smoke-report.md`. The write path is
-the GUARDED `EphemeralStoreWriter` — spacebox namespaces only, never shared instances.
+Instance lifecycle and build fixes: `docs/design-docs/spacebox-smoke-report.md`. The
+write path is the GUARDED `EphemeralStoreWriter` — spacebox namespaces only, never
+shared instances.
 """)
 
 code("""# === Setup ===
@@ -48,7 +51,7 @@ import numpy as np
 import ngso_sls
 print("ngso_sls", ngso_sls.__version__)
 
-TARGET = os.environ.get("SLS_EPHEMERAL_TARGET", "localhost:9997")
+TARGET = os.environ.get("SLS_EPHEMERAL_TARGET", "localhost:9996")
 PRESET = "~200 @48° (minimal)"        # smallest Jio constellation
 """)
 
@@ -105,12 +108,67 @@ display(explorer.results)
 code("""explorer.run()      # India res-3 run so Run-All yields a result tab + CSV + PNGs
 """)
 
-md("""**Next steps** — this instance carries platforms only, enough for the geometry
-round-trip above. The full scenario template (antennas with fields-of-regard, carriers,
-H3-res-3 user terminals over India, gateways, demand as service requests) activates the
-instance's link predictor and satsolver, after which the oracle/capacity readout
-(notebooks 06/07 machinery) applies to THIS constellation. Unload:
-`EphemeralStoreWriter(target, ...).delete_ids(ids)`; the instance itself expires on TTL.
+md("""## Full-model pipeline readout
+
+The instance runs the production pipeline on the loaded model. The cells below count
+the solver outputs and compare the instance's beam-candidate coverage against the
+`ngso_sls` engine at the model's accessibility mask.
+
+Model facts that set the mask: the user-terminal antennas carry an 80-deg conic field
+of regard (minimum elevation 10 deg). The satellite user antennas carry a 75-deg conic
+field of regard, which exceeds the Earth limb at 650 km (65.1 deg) and does not bind.
+The NMTS Keplerian elements carry no epoch; Spacetime propagates them two-body from
+unix 0. Match both in the engine: `KeplerJ2Propagator(j2=0.0)`, `ref_epoch_s=0.0`.
+""")
+
+code("""# === Solver output counts (production pipeline, this instance) ===
+with StorageEntityStore(TARGET) as s:
+    for t in ["NMTS_ENTITY", "NMTS_RELATIONSHIP", "BEAM_CANDIDATE_SEGMENT",
+              "NMTS_POINT_TO_POINT_LINK_REPORT", "PROPAGATION_VECTOR_SEGMENT",
+              "SCHEDULE", "ALLOCATED_DATA_RATE", "INTENT"]:
+        try:
+            print(f"{t}: {len(s._get_entities(t))}")
+        except Exception as e:
+            print(f"{t}: read failed ({type(e).__name__})")
+""")
+
+code("""# === Oracle compare: instance beam candidates vs ngso_sls engine ===
+from ngso_sls.spacetime.oracle import (read_beam_candidates,
+                                       beam_candidates_to_coverage,
+                                       engine_coverage_at_points)
+from ngso_sls.propagation.kepler_j2 import KeplerJ2Propagator
+
+ents_bc = read_beam_candidates(TARGET, dump_timeout_s=400)
+orc = beam_candidates_to_coverage(ents_bc, cell_res=3, k_values=[1, 2])
+eng = engine_coverage_at_points(rt, rt_pu, orc, 0.0, min_elev_deg=10.0,
+                                k_values=[1, 2],
+                                propagator=KeplerJ2Propagator(j2=0.0))
+d = eng["availability"] - orc["availability"]
+print(f"beam candidates: {len(ents_bc)}  cells: {orc['n_points']}  "
+      f"samples: {orc['n_samples']}")
+print(f"availability delta (engine - instance): mean {np.nanmean(d):+.4f}, "
+      f"max |d| {np.nanmax(np.abs(d)):.4f}")
+print(f"sats in view: engine {np.nanmean(eng['sats_in_view_mean']):.2f}, "
+      f"instance {np.nanmean(orc['sats_in_view_mean'])/2:.2f} "
+      f"(two user antennas per satellite)")
+""")
+
+md("""### Reference results (2026-08-18, window 11:30-13:39Z, 210 samples, 253 cells)
+
+- Store after load: 9,834 NMTS entities, 18,740 relationships.
+- Pipeline output: 20,974 beam-candidate segments, 29,682 point-to-point link
+  reports, 8,305 propagation-vector segments, 455 schedules, 502 allocated data
+  rates. 157 intents observed live when candidate coverage reached the solve
+  quantum; the feeder layer assigned all 3 gateway-satellite links.
+- Oracle compare at the 10-deg mask: availability delta mean +0.0000,
+  max |delta| 0.0000 over all 253 India res-3 cells. Mean satellites in view:
+  engine 4.59-4.61, instance 5.61 (bucket-level candidates count partial
+  visibility for a full 300-s bucket, so the instance reads high).
+- Figure: `output/pinned-instance/oracle_compare_india.png`.
+
+**Next steps** — read the intent/schedule stream during a covered window for the
+capacity readout (Slice B), and age out stale candidates before long reads. Unload:
+`EphemeralStoreWriter(target, ...).delete_ids(ids)`; the instance expires on TTL.
 """)
 
 nb = {"cells": CELLS,
