@@ -95,3 +95,27 @@ Also: `satsolver-nmts` and `storage-sqlite` come up scaled to 0. Scale both to 1
 provisioning entities = 9,834 entities, 18,740 relationships) imported with storectl
 over a port-forward. link-predictor cache went to STREAMING with the full model and
 assigned ~530k compute tasks (2 workers). Solver-output ramp observation continues.
+
+### Pipeline findings on the loaded model (2026-08-18, later)
+
+1. **Field of regard gates beam candidates.** With no `field_of_regard` on the
+   satellite user antennas, the link predictor wrote link reports but zero
+   BEAM_CANDIDATE_SEGMENT entities, and satsolver reported all 251 UTs as
+   "missing beam candidates". We added a 75-deg conic field of regard to both
+   satellite user antennas (the fss01 DRA shape) and re-imported the 200
+   satellite fragments. Beam candidates then ramped (8,217 within 10 minutes).
+2. **The default link predictor cannot reach the present on this model.** The
+   chart deploys 2 task workers with a 2-CPU request. The 200-sat x 251-UT
+   model produces a ~426k-task backlog. Candidates were written for buckets
+   ~15 minutes in the past, so satsolver saw "Accessible beam candidates: 0"
+   for the current quantum and routed nothing. Fix: patch the statefulset to
+   `--num_task_workers=14` with a 14-CPU / 24Gi request; the NAP autoscaler
+   provisions a matching node.
+3. **Satsolver runs the full solve loop.** Every cycle: access layer, user
+   link (3 shards), feeder link, channels, routing, intents, and 502
+   allocated-data-rate writes. The PoP node platform warning also appears on
+   fss01 and does not stop the solve.
+4. **20.2 output types.** This release writes NMTS_POINT_TO_POINT_LINK_REPORT
+   (not the newer LINK_REPORT type), SCHEDULE, ALLOCATED_DATA_RATE, and
+   BEAM_CANDIDATE_SEGMENT. Propagation vectors flow to satsolver in memory;
+   the store count for PROPAGATION_VECTOR_SEGMENT stays 0.
