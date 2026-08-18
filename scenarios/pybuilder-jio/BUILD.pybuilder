@@ -1,0 +1,60 @@
+load("@rules_python//python:defs.bzl", "py_binary")
+load("//scenarios:def.bzl", "py_scenario_rule")
+
+py_binary(
+    name = "smoke_scenario_builder",
+    srcs = ["smoke_scenario.py"],
+    main = "smoke_scenario.py",
+    deps = [
+        "//scenarios/builder/py/src/builders/entity:entity_builders",
+        "//scenarios/builder/py/src/core",
+    ],
+)
+
+py_scenario_rule(
+    name = "smoke_scenario",
+    binary = ":smoke_scenario_builder",
+)
+
+py_binary(
+    name = "simple_scenario_builder",
+    srcs = ["simple_scenario.py"],
+    main = "simple_scenario.py",
+    deps = [
+        "//github/tools/nbictl/proto:provisioning_python_proto",
+        "//scenarios/builder/py/src/builders/components:component_builders",
+        "//scenarios/builder/py/src/builders/entity:entity_builders",
+        "//scenarios/builder/py/src/builders/provisioning:system_builders",
+        "//scenarios/builder/py/src/core",
+        "@org_outernetcouncil_nmts//v1/proto:nmts_python_proto",
+    ],
+)
+
+py_scenario_rule(
+    name = "simple_scenario",
+    binary = ":simple_scenario_builder",
+)
+
+# SANDBOX-LOCAL (spacetime-sls Jio testing): do not commit
+py_binary(
+    name = "jio_min_scenario_builder",
+    srcs = [
+        "india_cells.py",
+        "jio_min_scenario.py",
+        "simple_scenario.py",
+    ],
+    main = "jio_min_scenario.py",
+    deps = [
+        "//github/tools/nbictl/proto:provisioning_python_proto",
+        "//scenarios/builder/py/src/builders/components:component_builders",
+        "//scenarios/builder/py/src/builders/entity:entity_builders",
+        "//scenarios/builder/py/src/builders/provisioning:system_builders",
+        "//scenarios/builder/py/src/core",
+        "@org_outernetcouncil_nmts//v1/proto:nmts_python_proto",
+    ],
+)
+
+py_scenario_rule(
+    name = "jio_min_scenario",
+    binary = ":jio_min_scenario_builder",
+)
