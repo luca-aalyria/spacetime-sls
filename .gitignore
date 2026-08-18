@@ -3,11 +3,12 @@ __pycache__/
 *.pyc
 *.egg-info/
 .pytest_cache/
-outputs/
 # customer/reference material (reljio, rivada, telesat, papers) — not for git
 references/
 .ipynb_checkpoints/
 notebooks/live_coverage_availability*.csv
 notebooks/*_run*_*.png
 notebooks/jio_min_instance_coverage*.csv
+output/*
+!output/pinned-instance/
 output/pinned-instance/beam_candidates.pkl

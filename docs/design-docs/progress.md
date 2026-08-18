@@ -73,7 +73,7 @@
 - Real-proto compat fixes (found live, all unit-tested): _NmtsEntityView (ek_* oneof →
   int kind), _is_external (message-field truthiness), _kepler (oneof default-instance),
   intent state enum→name. 141 tests green. Dump tool → /workspace/<instance>-dump.
-- HTML exports in `outputs/notebook-exports/` (gitignored); CSVs in `outputs/`.
+- HTML exports in `output/notebook-exports/` (gitignored); CSVs in `output/`. ALL outputs (CSVs, figures, notebook exports, instance entity dumps like `output/fss01-demo-dump/`) live under the single `output/` folder.
 - **Jio alignment (owner directive 2026-08-15):** notebooks must ultimately answer the
   original Reliance Jio questions (min-N/k sweep over India, availability targets,
   population-weighted coverage — M4–M7). nb07 proves engine-parity on a live
