@@ -91,6 +91,22 @@ manual fixes. Record them here for the next build.
 
 Also: `satsolver-nmts` and `storage-sqlite` come up scaled to 0. Scale both to 1.
 
+### fss01-demo deployment inventory (read live, 2026-08-18)
+
+fss01-demo is ArgoCD-managed (53 Applications, no helm release secrets). Chart
+constraint is `<20.3.0-0`, so each app floats to the newest 20.2-line build
+that exists FOR THAT CHART. Resolved revisions: 47 apps at
+`20.2.1771980430-ff066dc` (our pin matches), `web-netops` at
+`20.2.1771530948-e9847c6` (charts are not republished at every build stamp),
+`emitter` at a 20.1 build, `spacetime-seed` at an older 20.2, plus third-party
+otel-collector / pyroscope / vector. The 20.2 charts DO create Istio
+VirtualServices when given the right values: fss01's `spacetime` namespace has
+chart-created VSes on gateway `ingress/istio-ingress-gw` with per-app hosts
+(`<app>.fss01-demo.spacetime.aalyria.com`; bare host -> web-netops:8080, the
+NetOps SPA). The NetOps UI for a pinned instance therefore needs the
+`web-netops` chart at its own resolved build plus the VS-producing values, not
+a newer-era graft.
+
 **Result:** all pods Running. The full Jio 200-sat model (459 fragments + 502
 provisioning entities = 9,834 entities, 18,740 relationships) imported with storectl
 over a port-forward. link-predictor cache went to STREAMING with the full model and
