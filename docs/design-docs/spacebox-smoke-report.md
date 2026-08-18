@@ -107,6 +107,25 @@ NetOps SPA). The NetOps UI for a pinned instance therefore needs the
 `web-netops` chart at its own resolved build plus the VS-producing values, not
 a newer-era graft.
 
+### NetOps UI wired onto the pinned instance (2026-08-18)
+
+The spacebox CLI values already render VirtualServices for every app — the
+routes for `luca-sls1.internal.e2e.spacetime.aalyria.com` (netops-frontend
+under `/netopsfe/`, weather under `/weather/`) existed from the first install.
+The only missing piece was the SPA server. Fix, one command:
+
+```
+helm upgrade --install web-netops \
+  oci://us-central1-docker.pkg.dev/a5a-spacetime-artifacts/container-images/web-netops \
+  --version 20.2.1771530948-e9847c6 -n luca-sls1 -f <release-values.yaml>
+```
+
+Use the SAME values file as the other releases (`helm get values
+netops-frontend -n luca-sls1 -o yaml`); it carries `spacetime.dnsDomain`,
+`domainPrefix`, `commonNodePool: ""` and the `web-netops` block (`ON_NMTS`).
+Verified: pod Running, VirtualService bound, gateway answers with an IAP
+redirect, and the pod serves the Angular app ("Spacetime | Aalyria").
+
 **Result:** all pods Running. The full Jio 200-sat model (459 fragments + 502
 provisioning entities = 9,834 entities, 18,740 relationships) imported with storectl
 over a port-forward. link-predictor cache went to STREAMING with the full model and
