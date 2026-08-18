@@ -508,12 +508,32 @@ class ConstellationSource:
     LiveCoverageExplorer source contract: Walker values are re-read at every Run; the
     Spacetime pull is cached until 'Pull' is pressed again."""
 
+    #: Known instances -> local port-forward targets. The dropdown fills the target
+    #: field; the field stays editable for custom forwards.
+    INSTANCE_PRESETS = {
+        "fss01-demo (:9999)": "localhost:9999",
+        "ephemeral/pinned (:9996)": "localhost:9996",
+        "custom": None,
+    }
+
     def __init__(self, target="localhost:9999", dump_dir=None):
         self.walker = WalkerConstellationBuilder()
         self.mode = w.ToggleButtons(options=["Walker (presets/custom)", "Spacetime (live NMTS)"],
                                     value="Walker (presets/custom)", description="Source")
+        self.instance = w.Dropdown(options=list(self.INSTANCE_PRESETS),
+                                   value=next((k for k, v in self.INSTANCE_PRESETS.items()
+                                               if v == target), "custom"),
+                                   description="Instance",
+                                   style={"description_width": "130px"},
+                                   layout=w.Layout(width="330px"))
         self.target = w.Text(value=target, description="Store target",
                              style={"description_width": "130px"}, layout=w.Layout(width="330px"))
+
+        def _on_instance(change):
+            t = self.INSTANCE_PRESETS.get(change["new"])
+            if t:
+                self.target.value = t
+        self.instance.observe(_on_instance, names="value")
         self.pull_btn = w.Button(description="Pull from Spacetime", icon="download")
         self.pull_status = w.HTML("<i>not pulled yet — Pull, or first Run pulls automatically</i>")
         self.pull_btn.on_click(self._pull)
@@ -525,7 +545,7 @@ class ConstellationSource:
             self.mode,
             self.walker.panel,
             _lbl("Spacetime (used when Source = live NMTS; falls back to a local dump)"),
-            w.HBox([self.target, self.pull_btn]),
+            w.HBox([self.instance, self.target, self.pull_btn]),
             self.pull_status,
         ])
 
@@ -634,12 +654,16 @@ class LiveCoverageExplorer(CoverageExplorer):
             from datetime import datetime, timezone
             from .spacetime.oracle import (read_beam_candidates, beam_candidates_to_coverage,
                                            engine_coverage_at_points)
+            owner = getattr(self._source, "__self__", None)
+            target_w = getattr(owner, "target", None)
+            target = target_w.value if target_w is not None else "localhost:9999"
             prefix = "T:" + datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
-            ents = read_beam_candidates(bucket_prefix=prefix)
+            ents = read_beam_candidates(target, bucket_prefix=prefix)
+            if not ents:                       # sparse hour (e.g. catching-up predictor):
+                ents = read_beam_candidates(target)     # fall back to every stored bucket
             if ents:
                 orc = beam_candidates_to_coverage(ents, cell_res=self.cell_res.value,
                                                   k_values=[1, self.k_cov.value])
-                owner = getattr(self._source, "__self__", None)
                 ref = getattr(owner, "ref_epoch_s", None) or 0.0
                 eng = engine_coverage_at_points(
                     self._elems, self._plane_uid, orc, ref,
