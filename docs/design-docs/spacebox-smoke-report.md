@@ -159,3 +159,21 @@ assigned ~530k compute tasks (2 workers). Solver-output ramp observation continu
    (not the newer LINK_REPORT type), SCHEDULE, ALLOCATED_DATA_RATE, and
    BEAM_CANDIDATE_SEGMENT. Propagation vectors flow to satsolver in memory;
    the store count for PROPAGATION_VECTOR_SEGMENT stays 0.
+5. **Root cause of the link-predictor OOM loop (found 2026-08-18, later): the
+   chart sets `--entity_mutator_max_batch_size=1`.** Results drain to storage
+   at roughly 10 rows/s while the workers produce far faster. The write queue
+   accumulates in heap until the pod dies, and worker count does not change
+   this. Fix: set the flag to 100. After the fix the pod ran 20+ minutes flat
+   at ~22 Gi with zero restarts and wrote 14.8k link reports and 2.9k beam
+   candidates. This flag is the FIRST thing to set on any pinned instance.
+6. **Derived-data hygiene.** PROPAGATION_VECTOR_SEGMENT grew to 137k rows in
+   a few hours of crash-looping. Every predictor restart re-dumps the whole
+   store into its cache, so stale derived rows compound the OOM loop and slow
+   every UI snapshot query. Purge stale BEAM_CANDIDATE_SEGMENT /
+   NMTS_POINT_TO_POINT_LINK_REPORT / PROPAGATION_VECTOR_SEGMENT rows with
+   batched typed DELETEs (500 rows per Write, `ignore_consistency_check`);
+   137k rows purge in ~7 minutes. Harvest wanted data first.
+7. **Stuck read streams pin sqlite at full CPU.** After client timeouts (dead
+   port-forwards, canceled UI snapshots) the storage pod kept serving orphan
+   streams at ~7 cores with zero writes. Delete the storage pod to shed them;
+   the PVC keeps the data and consumers reconnect.

@@ -20,9 +20,13 @@
   2-h window) with two-body propagation from unix epoch 0 (NMTS Keplerian
   without epoch) at the 10° mask. `ngso_sls` v0.5.1 adds the propagator
   override on `engine_coverage_at_points`.
-- Operational limits found: sqlite storage saturates under 30 predictor
-  workers (probe cascade); 8 workers is sustainable but trails real time.
-  For live intent streams use `--storage pg` next time.
+- Operational limits found (root cause 2026-08-18 evening): the chart's
+  `--entity_mutator_max_batch_size=1` throttles predictor writes to ~10
+  rows/s; the write queue OOMs the pod at any worker count. Set the flag to
+  100. Also purge stale derived rows (137k propagation vectors accumulated)
+  and restart storage to shed orphan read streams. With these fixes the
+  pinned instance runs stably on sqlite; output arrives in waves while the
+  backlog burns. Full runbook: `spacebox-smoke-report.md`.
 - Cleanup owed: namespace `spacetime` on e2e-internal (manual delete),
   minkowski local patches (spacebox.go ×2, variables.bzl) marked REVERT ME,
   `luca-sls1` reaps on TTL.
