@@ -32,11 +32,14 @@ $SC import -e localhost:9996 --flavor=entities --ignore-consistency \
 Output: 9,834 entities, 18,740 relationships (459 fragments + 502
 provisioning entities).
 
-## Model requirements found on the pinned instance (2026-08-18)
+## Model requirements found on the pinned instance (2026-08-18/19)
 
 - Satellite user antennas MUST carry `field_of_regard` (conic, 75 deg, as on
   fss01's DRA antennas). Without it, the link predictor emits link reports
   but zero BEAM_CANDIDATE_SEGMENT entities, and satsolver reports every UT
   as "missing beam candidates" and routes nothing.
+- Satellite Keplerian elements MUST carry an explicit `epoch` (fss01 does).
+  Without it, solver components propagate from unix 0, and the NetOps UI
+  draws no orbits and places no satellites, so every node looks unconnected.
 - The PoP network node has no platform parent. fss01 shares this shape;
   satsolver logs a warning and continues.
