@@ -96,6 +96,12 @@ manual fixes. Record them here for the next build.
 
 Also: `satsolver-nmts` and `storage-sqlite` come up scaled to 0. Scale both to 1.
 
+> Reference instances: fss01-demo (project `a5a-s7e-fss01-demo`) runs the 20.2
+> line and the legacy beam-hopping model. mss01-demo (project
+> `a5a-s7e-mss01-demo`, same ADC access pattern) runs one of the latest builds
+> and model versions — use it as the reference for CURRENT model schema.
+> 22.3 model semantics sit closer to 20.2 than to mss01's build.
+
 ### fss01-demo deployment inventory (read live, 2026-08-18)
 
 fss01-demo is ArgoCD-managed (53 Applications, no helm release secrets). Chart
