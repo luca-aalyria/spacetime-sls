@@ -38,6 +38,9 @@ ALTITUDE_M = 650_000
 SEMIMAJOR_AXIS_M = 6_378_137 + ALTITUDE_M
 INCLINATION_DEG = 48.0
 PHASING_F = 1
+# Fixed element epoch: 2026-08-18T00:00:00Z. The NetOps UI needs an explicit
+# epoch to place satellites and draw orbits (fss01 satellites carry one).
+EPOCH_SECONDS = 1_787_011_200
 
 GATEWAYS = [  # (id-suffix, name, lat, lon)
   ("mumbai", "Gateway Mumbai", 19.08, 72.88),
@@ -80,7 +83,8 @@ def build_satellite(i, plane, slot):
     .with_keplerian(KeplerianElements(
       semimajor_axis_m=SEMIMAJOR_AXIS_M, eccentricity=0.0,
       inclination_deg=INCLINATION_DEG, raan_deg=raan,
-      argument_of_periapsis_deg=0.0, true_anomaly_deg=ta))
+      argument_of_periapsis_deg=0.0, true_anomaly_deg=ta,
+      epoch_seconds=EPOCH_SECONDS))
     .with_name(f"Jio Sat {i + 1} ({plane + 1}.{slot + 1})")
     .add_node(
       NetworkNodeBuilder(sid)
