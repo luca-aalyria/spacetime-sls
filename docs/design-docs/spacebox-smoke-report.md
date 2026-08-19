@@ -102,6 +102,20 @@ Also: `satsolver-nmts` and `storage-sqlite` come up scaled to 0. Scale both to 1
 > and model versions — use it as the reference for CURRENT model schema.
 > 22.3 model semantics sit closer to 20.2 than to mss01's build.
 
+### Legacy beam-hopping release boundary (verified by git ancestry, 2026-08-19)
+
+The legacy implementation was removed by commit `8f47fb93a5` ("Beam Hopping
+Part 5: Legacy Intent Removal", 2026-07-10). Verdict per release train:
+- Trains through 23.4 and train 24.0: LEGACY beam hopping.
+- Trains 24.1 and later: NEW beam hopping.
+- **Newest legacy-capable release build: `24.0.1785395995-e5af9d8`**
+  (2026-07-30). Use it for the next legacy-oracle instance rebuild.
+- All trains from 22.0 on have namespace isolation (`singleNamespace`,
+  commit `c3238561d3` of 2026-05-13), so multiple instances coexist.
+- The registry tags/list API caps responses at 5,195 tags and ignores `last`;
+  enumerate trains via a smaller chart (storage-pg) and verify with
+  `git merge-base --is-ancestor`.
+
 ### fss01-demo deployment inventory (read live, 2026-08-18)
 
 fss01-demo is ArgoCD-managed (53 Applications, no helm release secrets). Chart
