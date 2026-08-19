@@ -177,3 +177,18 @@ assigned ~530k compute tasks (2 workers). Solver-output ramp observation continu
    port-forwards, canceled UI snapshots) the storage pod kept serving orphan
    streams at ~7 cores with zero writes. Delete the storage pod to shed them;
    the PVC keeps the data and consumers reconnect.
+8. **sqlite history growth breaks the UI and eventually the disk (2026-08-19).**
+   Deletes write tombstones; history row-versions never shrink. Overnight churn
+   grew the DB until SQLITE_FULL on the 20 Gi PVC, and the NetOps
+   `/nodes/snapshot` endpoint (an as-of read that scans history) hung past 60 s
+   even after a purge. PVC expansion works online (`xfs-ssd` allows it), but
+   the durable fix is a fresh DB: scale writers to 0, delete the storage pod
+   AND its PVC, let the statefulset recreate both, re-import the model
+   (459 fragments + provisioning, ~10 min with port-forward retries). After
+   reload: `/nodes/snapshot` 200 in 1.5 s.
+9. **NetOps `/nodes/snapshot` also requires `connectivity-contract`.** The BFF
+   dials it (`--connectivity_contract_endpoint`); install the chart and scale
+   the deployment to 1 (it also ships scaled to 0).
+10. **Maintenance loop.** While the instance lives: purge derived rows every
+    ~2 h, watch predictor restarts, and shed orphan storage streams. Without
+    this, sqlite decays in hours (see 5-8).
