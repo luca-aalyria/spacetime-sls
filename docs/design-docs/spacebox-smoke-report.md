@@ -212,3 +212,17 @@ assigned ~530k compute tasks (2 workers). Solver-output ramp observation continu
 10. **Maintenance loop.** While the instance lives: purge derived rows every
     ~2 h, watch predictor restarts, and shed orphan storage streams. Without
     this, sqlite decays in hours (see 5-8).
+11. **The version-history growth driver is satsolver's per-cycle rewrite of
+    ALLOCATED_DATA_RATE and SCHEDULE** (2026-08-20, measured on pg): 407 ADRs
+    + ~840 schedules rewritten every ~2 s solve cycle grew
+    `spacetime.entity_versions` to 18.7M rows / 21 GB in ~12 h. The storage
+    GC (`--garbage_collection_interval=1h`) OOMs before it can collect at
+    that size. This mechanism, not the predictor, is what decayed BOTH
+    backends. Give storage-pg 12 Gi minimum and keep the history lean.
+12. **Do not delete version rows in SQL while writers run.** Removing
+    history under live writers desynchronizes their optimistic-concurrency
+    caches; every retry then logs the FULL entity batch inside the error
+    string, and the error storm itself OOMs the storage frontend. The clean
+    reset: scale satsolver + scheduling-sync + link-predictor to 0, TRUNCATE
+    `spacetime.entity_versions`, restart storage-pg, re-import the model
+    (~35 s), scale writers back up. Verified stable after this procedure.
