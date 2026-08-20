@@ -62,6 +62,7 @@ ceiling; shards embarrassingly parallel — multi-worker still to be wired). 29 
 | S5 | Time alignment: `step_s`/`quantum_width` configurable **floats**, default 10 s; support frame-aligned quanta (5G NR SFN wrap = 10.24 s); record quantum in manifest | A | ☑ |
 | S6 | `sharded == monolithic` determinism invariant (CI test) | A | ☑ |
 | S7 | Comparability = set-containment (LP-accessible ⊆ SLS-in-view) + measured error budget; NOT value equality / not a wiring-only engine swap | A/E | ☑ |
+| S8 | Every simulation instance carries at least 90 minutes of solver output (beam candidates, intents); 120 minutes is the target. One LEO orbital period is ~90 minutes, so shorter windows cannot close orbital-repeat analyses (owner directive 2026-08-20). Instance stores must support interval queries at this volume: pg honors idRanges; 20.2 sqlite does not and scans the full table | E | ◐ |
 
 ## Configurability & data (emergent)
 | ID | Requirement | Slice | Status |
