@@ -12,6 +12,12 @@ from . import _deps
 from .store import StoreError
 
 
+#: Local forward targets that carry PERMANENT instances. The writer refuses
+#: them unconditionally: fss01-demo and other shared references are read-only.
+PROTECTED_TARGETS = {"localhost:9999", "127.0.0.1:9999", "localhost:9995",
+                     "127.0.0.1:9995"}
+
+
 class EphemeralStoreWriter:
     """Writes NMTS entities into an ephemeral instance's Store (Store.Write, one
     RowMutation per call). Deliberately minimal: platforms (Keplerian) now; antennas /
@@ -23,6 +29,10 @@ class EphemeralStoreWriter:
                 "write path refused: pass i_am_writing_to_an_ephemeral_spacebox_instance="
                 "True and point target ONLY at a spacebox namespace you created "
                 "(policy: slice-de-ephemeral-instances.md)")
+        if target in PROTECTED_TARGETS:
+            raise StoreError.rpc(
+                f"write path refused: {target} is a PROTECTED permanent instance "
+                "(fss01-demo and shared references are read-only)")
         _deps.require("HAS_STORAGE", "proto_internal.storage (vendored stubs)")
         self._pb = _deps.storage_pb2
         self._channel = _deps.grpc.insecure_channel(

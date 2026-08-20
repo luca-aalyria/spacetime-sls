@@ -540,6 +540,19 @@ class ConstellationSource:
         self._pulled = None
         self.model_min_elev = None
         self._dump_dir = dump_dir
+        self.ut_aor = w.Dropdown(options=["India"], value="India",
+                                 description="UT area",
+                                 style={"description_width": "130px"},
+                                 layout=w.Layout(width="260px"))
+        self.ut_res = w.Dropdown(options=[2, 3, 4], value=3, description="UT H3 res",
+                                 style={"description_width": "130px"},
+                                 layout=w.Layout(width="220px"))
+        self.provision_btn = w.Button(description="Provision instance (write model)",
+                                      icon="upload", button_style="warning")
+        self.provision_status = w.HTML(
+            "<i>writes the CURRENT shape + one UT per cell to the selected instance "
+            "(wipes its model; permanent instances are refused)</i>")
+        self.provision_btn.on_click(self._provision)
         self.panel = w.VBox([
             _lbl("Constellation source (analysis cell re-reads this at every Run)"),
             self.mode,
@@ -547,6 +560,9 @@ class ConstellationSource:
             _lbl("Spacetime (used when Source = live NMTS; falls back to a local dump)"),
             w.HBox([self.instance, self.target, self.pull_btn]),
             self.pull_status,
+            _lbl("Provision (generate the NMTS model from the shape above and push it)"),
+            w.HBox([self.ut_aor, self.ut_res, self.provision_btn]),
+            self.provision_status,
         ])
 
     def _pull(self, _=None):
@@ -564,6 +580,37 @@ class ConstellationSource:
         except Exception as e:
             self._pulled = None
             self.pull_status.value = f"❌ {type(e).__name__}: {str(e)[:160]}"
+
+    #: Element epoch written for Walker shapes (they carry no epoch of their own).
+    PROVISION_EPOCH_S = 1_787_011_200            # 2026-08-18T00:00:00Z
+
+    def _provision(self, _=None):
+        self.provision_status.value = "⏳ generating model…"
+        try:
+            from .grids.h3_grid import h3_cells_for_aor
+            from .spacetime import modelgen
+            elems, pu, label = self.elements()
+            aor = AORS[self.ut_aor.value]
+            _cells, lat, lon = h3_cells_for_aor(aor, self.ut_res.value)
+            ut_cells = list(zip(lat.tolist(), lon.tolist()))
+            ref = getattr(self, "ref_epoch_s", None) or self.PROVISION_EPOCH_S
+            ents, rels, prov = modelgen.build_model(elems, pu, ut_cells, ref)
+            n_rows = [0]
+
+            def prog(msg, n_rows=n_rows):
+                self.provision_status.value = f"⏳ {msg}"
+            self.provision_status.value = (
+                f"⏳ pushing {len(ents)} entities / {len(rels)} rels / "
+                f"{len(prov)} demands to {self.target.value}…")
+            total = modelgen.push_model(self.target.value, ents, rels, prov,
+                                        wipe_first=True, progress=prog)
+            self._pulled = None                  # force a re-pull of the new model
+            self.provision_status.value = (
+                f"✅ {label}: {total} rows on {self.target.value} — "
+                f"{len(ut_cells)} UTs ({self.ut_aor.value} res {self.ut_res.value}). "
+                "Pull again to analyze the pushed model.")
+        except Exception as e:
+            self.provision_status.value = f"❌ {type(e).__name__}: {str(e)[:200]}"
 
     def elements(self):
         if self.mode.value.startswith("Walker"):
@@ -596,8 +643,14 @@ class LiveCoverageExplorer(CoverageExplorer):
         self._elems = np.asarray(e, dtype=float)
         self._plane_uid = np.asarray(pu)
         self._label = label
+        self.engine = w.ToggleButtons(
+            options=["Internal engine", "Spacetime oracle"],
+            value="Internal engine", description="Engine",
+            tooltips=["Offline ngso_sls engine (propagation + geometry)",
+                      "Read the instance's live beam candidates as the result "
+                      "(needs a link predictor running against this model)"])
         self.compare_spacetime = w.Checkbox(
-            value=False, description="Compare vs Spacetime prediction (pull beam candidates)")
+            value=False, description="Also run the other engine and add a Δ tab")
         self._oracle_pair = None
         super().__init__(csv_path=csv_path)
         # the scenario widget only feeds run-log text here (compute() ignores it)
@@ -623,10 +676,47 @@ class LiveCoverageExplorer(CoverageExplorer):
             w.HBox([self.require_diff_plane]),
             w.HBox([self.hex_alpha, self.terrain_on]),
             w.HBox([self.terrain_source]),
+            _lbl("Result engine"),
+            w.HBox([self.engine]),
             w.HBox([self.compare_spacetime]),
             self.run_btn,
             w.HBox([self.progress, self.status]),
         ])
+
+    def _instance_target(self):
+        owner = getattr(self._source, "__self__", None)
+        target_w = getattr(owner, "target", None)
+        return target_w.value if target_w is not None else "localhost:9999"
+
+    def _oracle_coverage(self):
+        """The instance's beam candidates aggregated into an nb01-shaped result."""
+        from datetime import datetime, timezone
+        from .spacetime.oracle import read_beam_candidates, beam_candidates_to_coverage
+        target = self._instance_target()
+        prefix = "T:" + datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+        ents = read_beam_candidates(target, bucket_prefix=prefix)
+        if not ents:                       # sparse hour (e.g. catching-up predictor):
+            ents = read_beam_candidates(target)     # fall back to every stored bucket
+        if not ents:
+            raise RuntimeError(
+                f"{target} has no beam candidates. The instance's link predictor "
+                "is off or still ramping. The Spacetime-oracle engine needs it.")
+        return beam_candidates_to_coverage(ents, cell_res=self.cell_res.value,
+                                           k_values=[1, self.k_cov.value],
+                                           default_k=self.k_cov.value)
+
+    def _engine_result(self, progress=None):
+        tg = TimeGrid(_EPOCH, duration_s=self.duration_min.value * 60.0,
+                      step_s=self.step_s.value)
+        overlap = self.overlap_s.value if self.handover_gate.value else None
+        return run_coverage_h3_elements(
+            self._elems, self._plane_uid, self.min_elev.value, tg, AORS[self.aor.value],
+            cell_res=self.cell_res.value, shard_res=(1 if self.use_shard.value else None),
+            chunk_steps=10, workers=(_n_workers() if self.use_shard.value else None),
+            progress=progress, terrain=self._terrain(),
+            continuity_overlap_s=overlap,
+            require_different_plane=self.require_diff_plane.value,
+            k_values=[self.k_cov.value], default_k=self.k_cov.value)
 
     def compute(self, progress=None) -> dict:
         if self._source is not None:            # refresh from the builder's current widgets
@@ -636,43 +726,40 @@ class LiveCoverageExplorer(CoverageExplorer):
             self._label = label
             self.scenario.options = [label]
             self.scenario.value = label
-        tg = TimeGrid(_EPOCH, duration_s=self.duration_min.value * 60.0,
-                      step_s=self.step_s.value)
-        overlap = self.overlap_s.value if self.handover_gate.value else None
-        res = run_coverage_h3_elements(
-            self._elems, self._plane_uid, self.min_elev.value, tg, AORS[self.aor.value],
-            cell_res=self.cell_res.value, shard_res=(1 if self.use_shard.value else None),
-            chunk_steps=10, workers=(_n_workers() if self.use_shard.value else None),
-            progress=progress, terrain=self._terrain(),
-            continuity_overlap_s=overlap,
-            require_different_plane=self.require_diff_plane.value,
-            k_values=[self.k_cov.value], default_k=self.k_cov.value)
-        alt_km = float((self._elems[:, 0] * (1 + self._elems[:, 1])).mean()) - 6378.137
-        inc = float(np.degrees(self._elems[:, 2]).mean())
+        from .spacetime.oracle import engine_coverage_at_points
+        use_oracle = self.engine.value == "Spacetime oracle"
         self._oracle_pair = None
-        if self.compare_spacetime.value:
-            from datetime import datetime, timezone
-            from .spacetime.oracle import (read_beam_candidates, beam_candidates_to_coverage,
-                                           engine_coverage_at_points)
-            owner = getattr(self._source, "__self__", None)
-            target_w = getattr(owner, "target", None)
-            target = target_w.value if target_w is not None else "localhost:9999"
-            prefix = "T:" + datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
-            ents = read_beam_candidates(target, bucket_prefix=prefix)
-            if not ents:                       # sparse hour (e.g. catching-up predictor):
-                ents = read_beam_candidates(target)     # fall back to every stored bucket
-            if ents:
-                orc = beam_candidates_to_coverage(ents, cell_res=self.cell_res.value,
-                                                  k_values=[1, self.k_cov.value])
-                ref = getattr(owner, "ref_epoch_s", None) or 0.0
+        owner = getattr(self._source, "__self__", None)
+        ref = getattr(owner, "ref_epoch_s", None) or 0.0
+        if use_oracle:
+            orc = self._oracle_coverage()
+            res = orc
+            if self.compare_spacetime.value:
                 eng = engine_coverage_at_points(
                     self._elems, self._plane_uid, orc, ref,
-                    min_elev_deg=self.min_elev.value, k_values=[1, self.k_cov.value])
+                    min_elev_deg=self.min_elev.value,
+                    k_values=[1, self.k_cov.value])
                 self._oracle_pair = (eng, orc)
+        else:
+            res = self._engine_result(progress=progress)
+            if self.compare_spacetime.value:
+                try:
+                    orc = self._oracle_coverage()
+                except RuntimeError:
+                    orc = None
+                if orc:
+                    eng = engine_coverage_at_points(
+                        self._elems, self._plane_uid, orc, ref,
+                        min_elev_deg=self.min_elev.value,
+                        k_values=[1, self.k_cov.value])
+                    self._oracle_pair = (eng, orc)
+        alt_km = float((self._elems[:, 0] * (1 + self._elems[:, 1])).mean()) - 6378.137
+        inc = float(np.degrees(self._elems[:, 2]).mean())
         res["_total_sats"] = int(self._elems.shape[0])
         res["_shape"] = (f"{self._label}: {res['_total_sats']} sats / "
                          f"{len(np.unique(self._plane_uid))} planes "
-                         f"@{inc:.1f}°/{alt_km:.0f}km")
+                         f"@{inc:.1f}°/{alt_km:.0f}km"
+                         + (" · SPACETIME ORACLE" if use_oracle else ""))
         res["_params"] = self._params()
         return res
 
