@@ -219,7 +219,19 @@ assigned ~530k compute tasks (2 workers). Solver-output ramp observation continu
     GC (`--garbage_collection_interval=1h`) OOMs before it can collect at
     that size. This mechanism, not the predictor, is what decayed BOTH
     backends. Give storage-pg 12 Gi minimum and keep the history lean.
-12. **Do not delete version rows in SQL while writers run.** Removing
+12. **The 22.3 storage GC collects expired candidate segments (2026-08-20).**
+    The hourly garbage-collection pass inside storage-pg deletes
+    BEAM_CANDIDATE_SEGMENT rows whose interval lies in the past. An imported
+    4.38M-row historical window shrank to ~115k rows within hours. The
+    20.2-era store has no such collector: sls1's frozen windows persist.
+    Consequence for requirement S8: archive output windows to DISK
+    (`output/fss01-demo-dump/window-*/` per-bucket pkl.gz) and hydrate a
+    store on demand; a live 22.3 store keeps roughly one hour of history.
+    Also: the predictor and satsolver Listen-cache the candidate table, so a
+    multi-million-row candidate set OOMs storage-pg through dump streams at
+    any memory limit — do not run live writers against a large imported
+    window.
+13. **Do not delete version rows in SQL while writers run.** Removing
     history under live writers desynchronizes their optimistic-concurrency
     caches; every retry then logs the FULL entity batch inside the error
     string, and the error storm itself OOMs the storage frontend. The clean
