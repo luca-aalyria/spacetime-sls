@@ -1,0 +1,72 @@
+{
+ "model_A": {
+  "n_sats": 200,
+  "n_planes": 20,
+  "alt_km": 650.0,
+  "inclination_deg": 48.0,
+  "ref_epoch_s": 1787011200.0,
+  "n_uts": 251
+ },
+ "model_B": {
+  "n_sats": 150,
+  "n_planes": 10,
+  "alt_km": 1157.3,
+  "inclination_deg": 53.0,
+  "ref_epoch_s": 1758743186.0,
+  "n_uts": 203
+ },
+ "engine_A_india": {
+  "k1_mean": 0.9243,
+  "k1_full_cells_pct": 17.5,
+  "sats_in_view_mean": 1.48,
+  "n_cells": 251
+ },
+ "engine_B_india": {
+  "k1_mean": 0.9972,
+  "k1_full_cells_pct": 71.3,
+  "sats_in_view_mean": 2.42,
+  "n_cells": 251
+ },
+ "engine_A_global": {
+  "k1_mean": 0.7794,
+  "k1_full_cells_pct": 32.1,
+  "sats_in_view_mean": 1.45,
+  "n_cells": 5862
+ },
+ "engine_B_global": {
+  "k1_mean": 0.9228,
+  "k1_full_cells_pct": 81.5,
+  "sats_in_view_mean": 2.56,
+  "n_cells": 5862
+ },
+ "oracle_A": {
+  "n_points": 251,
+  "n_samples": 90,
+  "k1_mean": 1.0
+ },
+ "oracle_B": {
+  "n_points": 211,
+  "n_samples": 3000,
+  "k1_mean": 1.0521
+ },
+ "delta_B": {
+  "propagator": "two-body",
+  "mean_delta": -0.0009,
+  "max_abs_delta": 0.0307
+ },
+ "delta_A": {
+  "propagator": "two-body",
+  "mask_deg": 10.0,
+  "n_healthy_buckets": 3,
+  "mean_delta": 0.0,
+  "max_abs_delta": 0.0
+ },
+ "capacity_B": {
+  "n_requests": 425,
+  "n_served": 422,
+  "served_pct": 99.3,
+  "aggregate_gbps": 0.56,
+  "median_served_mbps": 0.5,
+  "requested_mbps": 2.0
+ }
+}
